@@ -32,3 +32,29 @@ Fixpoint regexp_of_string (s : string) : regexp :=
 
 Coercion Lit : ascii >-> regexp.
 Coercion regexp_of_string : string >-> regexp.
+
+Reserved Notation "s =~ re" (at level 80).
+
+Inductive regexp_match : string -> regexp -> Prop :=
+  | MEmpty :
+      "" =~ EmptyStr
+  | MLit a :
+      String a "" =~ Lit a
+  | MCat s1 re1 s2 re2 :
+      s1 =~ re1 ->
+      s2 =~ re2 ->
+      s1 ++ s2 =~ // re1; re2 //
+  | MAltL s1 re1 re2 :
+      s1 =~ re1 ->
+      s1 =~ // re1 | re2 //
+  | MAltR s2 re1 re2 :
+      s2 =~ re2 ->
+      s2 =~ // re1 | re2 //
+  | MStar0 re :
+      "" =~ // re* //
+  | MStarCat s1 s2 re :
+      s1 =~ re ->
+      s2 =~ // re* // ->
+      s1 ++ s2 =~ // re* //
+
+  where "s =~ re" := (regexp_match s re).
