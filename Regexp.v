@@ -227,6 +227,31 @@ Proof.
     + apply MStar0.
 Qed.
 
+Lemma MCat_empty_set_l : forall re1 re2 s,
+  is_empty_str re1 = true ->
+  s =~ Cat re1 re2 <-> s =~ re2.
+Proof.
+  split; intros.
+  - invert H0. apply (match_empty_str _ s1 H) in H4. invert H4. assumption.
+  - apply (match_empty_str _ []) in H.
+    rewrite <- (app_nil_l _). apply MCat.
+    + apply H, MEmptyStr.
+    + assumption.
+Qed.
+
+Lemma MCat_empty_set_r : forall re1 re2 s,
+  is_empty_str re2 = true ->
+  s =~ Cat re1 re2 <-> s =~ re1.
+Proof.
+  split; intros.
+  - invert H0. apply (match_empty_str _ s2 H) in H5. invert H5.
+    rewrite app_nil_r. assumption.
+  - apply (match_empty_str _ []) in H.
+    rewrite <- (app_nil_r _). apply MCat.
+    + assumption.
+    + apply H, MEmptyStr.
+Qed.
+
 Fixpoint split_first (re : regexp) : option (list ascii * regexp) :=
   match re with
   | EmptySet => None
@@ -280,11 +305,12 @@ Proof.
         invert H0.
         apply (match_empty_str _ s1 Hempty) in H4. invert H4.
         assumption.
-      * destruct (split_first re1) eqn:Hsplit; try discriminate.
-        destruct p. invert H. admit.
-    + destruct (split_first re1) eqn:Hsplit; try discriminate.
-      invert H0.
-      * Admitted.
+      * destruct (split_first re1) eqn:Hsplit1; try discriminate. destruct p.
+        invert H. admit.
+    + destruct (split_first re1) eqn:Hsplit1; try discriminate. destruct p.
+      destruct (split_first re2) eqn:Hsplit2; try discriminate. destruct p.
+      invert H. invert H0.
+      * apply IHre1. Admitted.
 
 Fixpoint combine_classes (re : regexp) : regexp.
 Admitted.
