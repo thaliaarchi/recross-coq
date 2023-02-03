@@ -1,6 +1,6 @@
-Require Import Ascii Bool List String.
-Import ListNotations.
-Open Scope string_scope.
+Require Import Bool.
+Require Import Ascii String. Open Scope string_scope.
+Require Import List. Import ListNotations.
 
 Inductive regexp :=
   | EmptySet
@@ -143,8 +143,25 @@ Proof.
       apply (IHre1 H1 _). reflexivity.
 Qed.
 
-Fixpoint split_first (re : regexp) : option (ascii * regexp).
-Admitted.
+Fixpoint split_first (re : regexp) : option (list ascii * regexp) :=
+  match re with
+  | EmptySet => None
+  | EmptyStr => None
+  | Lit c => Some ([c], EmptyStr)
+  | Cat re1 re2 =>
+      if is_empty_str re1 then split_first re2 else
+      match split_first re1 with
+      | Some (cs, re1') => Some (cs, Cat re1' re2)
+      | _ => None
+      end
+  | Alt re1 re2 =>
+      match split_first re1, split_first re2 with
+      | Some (cs1, re1'), Some (cs2, re2') => Some (cs1 ++ cs2, Alt re1' re2')
+      | _, _ => None
+      end
+  | Star re => None
+  | Class cs => Some (cs, EmptyStr)
+  end.
 
 Fixpoint combine_classes (re : regexp) : regexp.
 Admitted.
