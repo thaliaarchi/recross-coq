@@ -2,6 +2,8 @@ Require Import Bool.
 Require Import Ascii String. Open Scope string_scope.
 Require Import List. Import ListNotations.
 
+Local Ltac invert H := inversion H; subst; clear H.
+
 Inductive regexp :=
   | EmptySet
   | EmptyStr
@@ -36,7 +38,7 @@ Coercion regexp_of_string : string >-> regexp.
 Reserved Notation "s =~ re" (at level 80).
 
 Inductive regexp_match : list ascii -> regexp -> Prop :=
-  | MEmpty :
+  | MEmptyStr :
       [] =~ EmptyStr
   | MLit c :
       [c] =~ Lit c
@@ -62,49 +64,61 @@ Inductive regexp_match : list ascii -> regexp -> Prop :=
 
   where "s =~ re" := (regexp_match s re).
 
+Lemma MEmptySet_not : forall s,
+  ~ (s =~ EmptySet).
+Proof.
+  unfold not. intros. inversion H. Qed.
+
+Lemma MEmptyStr_nil : forall s,
+  s =~ EmptyStr <-> s = [].
+Proof.
+  split; intros.
+  - invert H. reflexivity.
+  - subst. apply MEmptyStr. Qed.
+
 Lemma MCat_EmptySet_l : forall re s,
   ~ (s =~ Cat EmptySet re).
 Proof.
-  unfold not. intros. inversion H; subst. inversion H3. Qed.
+  unfold not. intros. invert H. invert H3. Qed.
 
 Lemma MCat_EmptySet_r : forall re s,
   ~ (s =~ Cat re EmptySet).
 Proof.
-  unfold not. intros. inversion H; subst. inversion H4. Qed.
+  unfold not. intros. invert H. invert H4. Qed.
 
 Lemma MCat_EmptyStr_l : forall re s,
   s =~ Cat EmptyStr re <-> s =~ re.
 Proof.
   split; intros.
-  - inversion H; subst. inversion H3; subst. assumption.
-  - rewrite <- (app_nil_l _). constructor. constructor. assumption. Qed.
+  - invert H. invert H3. assumption.
+  - rewrite <- (app_nil_l _). apply MCat. apply MEmptyStr. assumption. Qed.
 
 Lemma MCat_EmptyStr_r : forall re s,
   s =~ Cat re EmptyStr <-> s =~ re.
 Proof.
   split; intros.
-  - inversion H; inversion H4; subst. rewrite app_nil_r. assumption.
-  - rewrite <- (app_nil_r _). apply MCat. assumption. apply MEmpty. Qed.
+  - invert H. invert H4. rewrite app_nil_r. assumption.
+  - rewrite <- (app_nil_r _). apply MCat. assumption. apply MEmptyStr. Qed.
 
 Lemma MAlt : forall s re1 re2,
   s =~ Alt re1 re2 <-> s =~ re1 \/ s =~ re2.
 Proof.
   split; intros.
-  - inversion H; subst; [left | right]; assumption.
+  - invert H; [left | right]; assumption.
   - destruct H; [apply MAltL | apply MAltR]; assumption. Qed.
 
 Lemma MAlt_EmptySet_l : forall re s,
   s =~ Alt EmptySet re <-> s =~ re.
 Proof.
   split; intros.
-  - inversion H; subst. inversion H2. assumption.
+  - invert H. invert H2. assumption.
   - apply MAltR. assumption. Qed.
 
 Lemma MAlt_EmptySet_r : forall re s,
   s =~ Alt re EmptySet <-> s =~ re.
 Proof.
   split; intros.
-  - inversion H; subst. assumption. inversion H2.
+  - invert H. assumption. invert H2.
   - apply MAltL. assumption. Qed.
 
 Lemma MStar1 : forall s re,
@@ -116,26 +130,26 @@ Lemma MStar_EmptySet : forall s,
   s =~ Star EmptySet <-> s =~ EmptyStr.
 Proof.
   split; intros.
-  - inversion H; subst. apply MEmpty. inversion H1.
-  - inversion H; subst. apply MStar0. Qed.
+  - invert H. apply MEmptyStr. invert H1.
+  - invert H. apply MStar0. Qed.
 
 Lemma MClass0 : forall s,
   s =~ Class [] <-> s =~ EmptySet.
 Proof.
-  split; intros; inversion H; subst. inversion H2. Qed.
+  split; intros; invert H. invert H2. Qed.
 
 Lemma MClass1 : forall c s,
   s =~ Class [c] <-> s =~ Lit c.
 Proof.
-  split; intros; inversion H; subst.
-  - inversion H2; subst. apply MLit. inversion H0.
+  split; intros; invert H.
+  - invert H2. apply MLit. invert H.
   - apply MClass, in_eq. Qed.
 
 Lemma MClassN : forall c cs s,
   s =~ Class (c :: cs) <-> s =~ Alt (Lit c) (Class cs).
 Proof.
   split; intros;
-  inversion H; inversion H2; subst.
+  invert H; invert H2.
   - apply MAltL, MLit.
   - apply MAltR, MClass. assumption.
   - apply MClass, in_eq.
@@ -165,44 +179,52 @@ Fixpoint is_empty_str (re : regexp) : bool :=
   end.
 
 Theorem match_empty_set : forall re s,
-  is_empty_set re = true -> ~ (s =~ re).
+  is_empty_set re = true ->
+  s =~ re <-> s =~ EmptySet.
 Proof.
-  unfold not. induction re; cbn; intros; try discriminate.
-  - inversion H0.
-  - inversion H0; subst.
-    apply orb_true_iff in H as [].
-    + destruct (IHre1 _ H H4).
-    + destruct (IHre2 _ H H5).
-  - apply andb_true_iff in H as [H1 H2].
-    inversion H0; subst.
-    + destruct (IHre1 _ H1 H4).
-    + destruct (IHre2 _ H2 H4).
-  - destruct cs.
-    + inversion H0; subst. destruct (in_nil H3).
-    + discriminate.
+  split; generalize dependent s.
+  - induction re; cbn in *; intros; try discriminate.
+    + assumption.
+    + invert H0.
+      apply orb_true_iff in H as [].
+      * apply (IHre1 H _) in H4. invert H4.
+      * apply (IHre2 H _) in H5. invert H5.
+    + apply andb_true_iff in H as [H1 H2].
+      invert H0.
+      * apply (IHre1 H1 _) in H4. invert H4.
+      * apply (IHre2 H2 _) in H4. invert H4.
+    + destruct cs.
+      * invert H0. destruct (in_nil H3).
+      * discriminate.
+  - intros. invert H0.
 Qed.
 
 Theorem match_empty_str : forall re s,
   is_empty_str re = true ->
-  s =~ re <-> s = [].
+  s =~ re <-> s =~ EmptyStr.
 Proof.
   split; generalize dependent s.
   - induction re; cbn in *; intros; try discriminate.
-    + inversion H0; subst. reflexivity.
+    + assumption.
     + apply andb_true_iff in H as [H1 H2].
-      inversion H0; subst. rewrite (IHre1 H1 _ H5), (IHre2 H2 _ H6). reflexivity.
+      invert H0.
+      apply (IHre1 H1 _) in H5. invert H5.
+      apply (IHre2 H2 _) in H6. invert H6.
+      apply MEmptyStr.
     + apply andb_true_iff in H as [H1 H2].
-      inversion H0; subst; [apply (IHre1 H1 _ H4) | apply (IHre2 H2 _ H4)].
-    + inversion H0; subst.
-      * reflexivity.
-      * destruct (match_empty_set _ s1 H H2).
-  - induction re; cbn in *; intros; subst;
-    try discriminate; try constructor.
+      invert H0; [apply (IHre1 H1 _ H4) | apply (IHre2 H2 _ H4)].
+    + invert H0.
+      * apply MEmptyStr.
+      * apply (match_empty_set _ s1 H) in H2. invert H2.
+  - induction re; cbn in *; intros; try discriminate;
+    invert H0.
+    + apply MEmptyStr.
     + apply andb_true_iff in H as [H1 H2].
       rewrite <- (app_nil_r _).
-      apply MCat; [apply (IHre1 H1 _) | apply (IHre2 H2 _)]; reflexivity.
+      apply MCat; [apply (IHre1 H1 _) | apply (IHre2 H2 _)]; apply MEmptyStr.
     + apply andb_true_iff in H as [H1 H2].
-      apply (IHre1 H1 _). reflexivity.
+      apply MAltL, (IHre1 H1 _), MEmptyStr.
+    + apply MStar0.
 Qed.
 
 Fixpoint split_first (re : regexp) : option (list ascii * regexp) :=
@@ -245,10 +267,24 @@ Fixpoint split_last (re : regexp) : option (list ascii * regexp) :=
   | Class cs => Some (cs, EmptyStr)
   end.
 
-Lemma split_first_cat : forall re cs re' s,
+Lemma cat_split_first : forall re cs re' s,
   split_first re = Some (cs, re') ->
   s =~ re <-> s =~ Cat (Class cs) re'.
-Proof. Admitted.
+Proof.
+  split;
+  generalize dependent s; generalize dependent re'; generalize dependent cs.
+  - induction re; cbn; intros; try discriminate.
+    + invert H. apply MCat_EmptyStr_r, MClass1. assumption.
+    + destruct (is_empty_str re1) eqn:Hempty.
+      * apply IHre2. assumption.
+        invert H0.
+        apply (match_empty_str _ s1 Hempty) in H4. invert H4.
+        assumption.
+      * destruct (split_first re1) eqn:Hsplit; try discriminate.
+        destruct p. invert H. admit.
+    + destruct (split_first re1) eqn:Hsplit; try discriminate.
+      invert H0.
+      * Admitted.
 
 Fixpoint combine_classes (re : regexp) : regexp.
 Admitted.
