@@ -56,8 +56,6 @@ Inductive regexp_match : list ascii -> regexp -> Prop :=
       s1 =~ re ->
       s2 =~ Star re ->
       s1 ++ s2 =~ Star re
-  | MClass0 :
-      [] =~ Class []
   | MClass c cs :
       In c cs ->
       [c] =~ Class cs
@@ -81,7 +79,7 @@ Fixpoint is_empty_set (re : regexp) : bool :=
   | EmptySet => true
   | EmptyStr => false
   | Lit _ => false
-  | Cat re1 re2 => is_empty_set re1 && is_empty_set re2
+  | Cat re1 re2 => is_empty_set re1 || is_empty_set re2
   | Alt re1 re2 => is_empty_set re1 && is_empty_set re2
   | Star _ => false
   | Class [] => true
@@ -95,24 +93,46 @@ Fixpoint is_empty_str (re : regexp) : bool :=
   | Lit _ => false
   | Cat re1 re2 => is_empty_str re1 && is_empty_str re2
   | Alt re1 re2 => is_empty_str re1 && is_empty_str re2
-  | Star EmptySet => true
-  | Star re => is_empty_str re
+  | Star re => is_empty_set re
   | Class _ => false
   end.
 
-Theorem match_empty_str : forall re,
-  is_empty_str re = true <-> forall s, s =~ re -> s = [].
+Theorem empty_set_class : forall s,
+  s =~ EmptySet <-> s =~ Class [].
 Proof.
-  split.
-  - induction re; cbn; intros; try discriminate;
-    inversion H0; subst;
-    try apply andb_true_iff in H as [H1 H2].
-    + reflexivity.
-    + rewrite (IHre1 H1 _ H4), (IHre2 H2 _ H5). reflexivity.
-    + apply (IHre1 H1 _ H3).
-    + apply (IHre2 H2 _ H3).
-    + reflexivity.
-    + Admitted.
+  split; intros; inversion H; subst. destruct (in_nil H2). Qed.
+
+Theorem match_empty_set : forall re s,
+  is_empty_set re = true -> ~ (s =~ re).
+Proof.
+  unfold not. induction re; cbn; intros; try discriminate.
+  - inversion H0.
+  - inversion H0; subst.
+    apply orb_true_iff in H as [].
+    + destruct (IHre1 _ H H4).
+    + destruct (IHre2 _ H H5).
+  - apply andb_true_iff in H as [H1 H2].
+    inversion H0; subst.
+    + destruct (IHre1 _ H1 H4).
+    + destruct (IHre2 _ H2 H4).
+  - destruct cs.
+    + inversion H0; subst. destruct (in_nil H3).
+    + discriminate.
+Qed.
+
+Theorem match_empty_str : forall re s,
+  is_empty_str re = true ->
+  s =~ re <-> s = [].
+Proof.
+  split; generalize dependent s.
+  - induction re; cbn in *; intros; try discriminate.
+    + inversion H0; subst. reflexivity.
+    + apply andb_true_iff in H as [H1 H2].
+      inversion H0; subst. rewrite (IHre1 H1 _ H5), (IHre2 H2 _ H6). reflexivity.
+    + apply andb_true_iff in H as [H1 H2].
+      inversion H0; subst; [apply (IHre1 H1 _ H4) | apply (IHre2 H2 _ H4)].
+    + inversion H0; subst. reflexivity.
+      Admitted.
 
 Fixpoint split_first (re : regexp) : option (ascii * regexp).
 Admitted.
