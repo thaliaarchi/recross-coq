@@ -131,8 +131,17 @@ Proof.
       inversion H0; subst. rewrite (IHre1 H1 _ H5), (IHre2 H2 _ H6). reflexivity.
     + apply andb_true_iff in H as [H1 H2].
       inversion H0; subst; [apply (IHre1 H1 _ H4) | apply (IHre2 H2 _ H4)].
-    + inversion H0; subst. reflexivity.
-      Admitted.
+    + inversion H0; subst.
+      * reflexivity.
+      * destruct (match_empty_set _ s1 H H2).
+  - induction re; cbn in *; intros; subst;
+    try discriminate; try constructor.
+    + apply andb_true_iff in H as [H1 H2].
+      rewrite <- (app_nil_r _).
+      apply MCat; [apply (IHre1 H1 _) | apply (IHre2 H2 _)]; reflexivity.
+    + apply andb_true_iff in H as [H1 H2].
+      apply (IHre1 H1 _). reflexivity.
+Qed.
 
 Fixpoint split_first (re : regexp) : option (ascii * regexp).
 Admitted.
