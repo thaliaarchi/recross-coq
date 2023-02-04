@@ -93,7 +93,7 @@ Proof.
 Theorem Class0 :
   equiv (Class []) EmptySet.
 Proof.
-  split; intros; invert H. invert H2. Qed.
+  split; intros; now invert H. Qed.
 
 Theorem Class1 : forall c,
   equiv (Class [c]) (Lit c).
@@ -102,7 +102,7 @@ Proof.
   - invert H2. apply MLit. invert H.
   - apply MClass, in_eq. Qed.
 
-Theorem ClassN : forall c cs,
+Theorem Class1_Alt : forall c cs,
   equiv (Class (c :: cs)) (Alt (Lit c) (Class cs)).
 Proof.
   split; intros; invert H; invert H2.
@@ -110,6 +110,19 @@ Proof.
   - now apply MAltR, MClass.
   - apply MClass, in_eq.
   - now apply MClass, in_cons. Qed.
+
+Theorem ClassN : forall cs,
+  equiv (Class cs) (fold_right (fun c => Alt (Lit c)) EmptySet cs).
+Proof.
+  split; intros;
+  induction cs; cbn; try now invert H.
+  - invert H. invert H2.
+    + apply MAltL, MLit.
+    + now apply MAltR, IHcs, MClass.
+  - invert H.
+    + now apply Class1_Alt, MAltL.
+    + now apply Class1_Alt, MAltR, IHcs.
+Qed.
 
 Theorem Star_idemp : forall re,
   equiv (Star (Star re)) (Star re).
