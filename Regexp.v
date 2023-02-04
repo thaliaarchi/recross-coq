@@ -269,6 +269,16 @@ Theorem Alt_EmptySet_r : forall re,
 Proof.
   split; intros. now invert H. now apply MAltL. Qed.
 
+Theorem Alt_Class : forall cs1 cs2,
+  equiv (Alt (Class cs1) (Class cs2)) (Class (cs1 ++ cs2)).
+Proof.
+  split; intros.
+  - invert H; invert H2;
+    apply MClass; apply in_app_iff; [now left | now right].
+  - invert H; apply in_app_iff in H2 as [];
+    [apply MAltL | apply MAltR]; now apply MClass.
+Qed.
+
 Fixpoint is_empty_set (re : regexp) : bool :=
   match re with
   | EmptySet => true
@@ -292,6 +302,32 @@ Fixpoint is_empty_str (re : regexp) : bool :=
   | Cat re1 re2 => is_empty_str re1 && is_empty_str re2
   | Alt re1 re2 => is_empty_str re1 && is_empty_str re2
   | Inter re1 re2 => is_empty_str re1 && is_empty_str re2
+  end.
+
+Definition has_empty_set (re : regexp) : bool :=
+  match re with
+  | EmptySet | EmptyStr | Lit _ | Class _ => false
+  | Star re => is_empty_set re
+  | Cat re1 re2 => is_empty_set re1 || is_empty_set re2
+  | Alt re1 re2 => is_empty_set re1 || is_empty_set re2
+  | Inter re1 re2 => is_empty_set re1 || is_empty_set re2
+  end.
+
+Definition has_empty_str (re : regexp) : bool :=
+  match re with
+  | EmptySet | EmptyStr | Lit _ | Class _ => false
+  | Star re => is_empty_str re
+  | Cat re1 re2 => is_empty_str re1 || is_empty_str re2
+  | Alt re1 re2 => false (* for optional *)
+  | Inter re1 re2 => is_empty_str re1 || is_empty_set re2
+  end.
+
+Fixpoint matches_empty_str (re : regexp) : bool :=
+  match re with
+  | Star _ => true
+  | Alt re1 re2 => is_empty_str re1 || is_empty_str re2
+  | Inter re1 re2 => matches_empty_str re1 && matches_empty_str re2
+  | _ => is_empty_str re
   end.
 
 Theorem match_empty_set : forall re,
@@ -438,5 +474,5 @@ Proof.
       invert H. invert H0.
       * apply IHre1. Admitted.
 
-Fixpoint combine_classes (re : regexp) : regexp.
+Fixpoint normalize (re : regexp) : regexp.
 Admitted.
