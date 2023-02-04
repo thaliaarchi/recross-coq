@@ -124,16 +124,46 @@ Proof.
     + now apply Class1_Alt, MAltR, IHcs.
 Qed.
 
-Theorem Star_idemp : forall re,
-  equiv (Star (Star re)) (Star re).
-Admitted.
-
 Theorem Star_EmptySet :
   equiv (Star EmptySet) EmptyStr.
 Proof.
   split; intros.
   - invert H. apply MEmptyStr. invert H1.
   - invert H. apply MStar0. Qed.
+
+Theorem Star_EmptyStr :
+  equiv (Star EmptyStr) EmptyStr.
+Proof.
+  split; intros.
+  - dependent induction H.
+    + apply MEmptyStr.
+    + invert H. now apply IHregexp_match2.
+  - invert H. apply MStar0.
+Qed.
+
+Theorem Star_Cat : forall re s1 s2,
+  s1 =~ Star re ->
+  s2 =~ Star re ->
+  s1 ++ s2 =~ Star re.
+Proof.
+  intros re s1 s2 H. generalize dependent s2.
+  dependent induction H; intros.
+  - assumption.
+  - rewrite <- app_assoc. apply MStarCat. assumption.
+    now apply IHregexp_match2.
+Qed.
+
+Theorem Star_idemp : forall re,
+  equiv (Star (Star re)) (Star re).
+Proof.
+  split; intros.
+  - dependent induction H.
+    + apply MStar0.
+    + apply Star_Cat. assumption. now apply IHregexp_match2.
+  - dependent induction H.
+    + apply MStar0.
+    + apply MStarCat. now apply MStar1. now apply IHregexp_match2.
+Qed.
 
 Theorem Star_Alt_EmptyStr_l : forall re,
   equiv (Star (Alt EmptyStr re)) (Star re).
@@ -184,6 +214,13 @@ Proof.
   split; intros.
   - invert H. invert H4. now rewrite app_nil_r.
   - rewrite <- (app_nil_r _). now apply MCat, MEmptyStr. Qed.
+
+Theorem Cat_Star : forall re,
+  equiv (Cat (Star re) (Star re)) (Star re).
+Proof.
+  split; intros.
+  - invert H. now apply Star_Cat.
+  - rewrite <- (app_nil_r _). now apply MCat, MStar0. Qed.
 
 Theorem Cat_Alt_distr_l : forall re1 re2 re3,
   equiv (Cat re1 (Alt re2 re3)) (Alt (Cat re1 re2) (Cat re1 re3)).
