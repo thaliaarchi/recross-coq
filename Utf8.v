@@ -35,20 +35,20 @@ Fixpoint decode_utf8 (s : string) : list rune * bool :=
   | b[1,1,0,b10,b9,b8,b7,b6] :::
     b[1,0,b5,b4,b3,b2,b1,b0] ::: s' =>
       let r := N_of_digits [b0;b1;b2;b3;b4;b5;b6;b7;b8;b9;b10] in
-      if (r <? 128)%N then ([], false) else
+      if (r <? 0x80)%N then ([], false) else
       let (rs, ok) := decode_utf8 s' in (r :: rs, ok)
   | b[1,1,1,0,b15,b14,b13,b12] :::
     b[1,0,b11,b10,b9,b8,b7,b6] :::
     b[1,0,b5,b4,b3,b2,b1,b0] ::: s' =>
       let r := N_of_digits [b0;b1;b2;b3;b4;b5;b6;b7;b8;b9;b10;b11;b12;b13;b14;b15] in
-      if ((r <? 2048) || ((55296 <=? r) && (r <=? 57343)))%N then ([], false) else
+      if ((r <? 0x800) || ((0xD800 <=? r) && (r <=? 0xDFFF)))%N then ([], false) else
       let (rs, ok) := decode_utf8 s' in (r :: rs, ok)
   | b[1,1,1,1,0,b20,b19,b18] :::
     b[1,0,b17,b16,b15,b14,b13,b12] :::
     b[1,0,b11,b10,b9,b8,b7,b6] :::
     b[1,0,b5,b4,b3,b2,b1,b0] ::: s' =>
       let r := N_of_digits [b0;b1;b2;b3;b4;b5;b6;b7;b8;b9;b10;b11;b12;b13;b14;b15;b16;b17;b18;b19;b20] in
-      if ((r <? 65536) || (1114111 <? r))%N then ([], false) else
+      if ((r <? 0x10000) || (0x10ffff <? r))%N then ([], false) else
       let (rs, ok) := decode_utf8 s' in (r :: rs, ok)
   | _ ::: _ => ([], false)
   | "" => ([], true)
