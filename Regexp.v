@@ -1,6 +1,7 @@
 Require Import Bool.
 Require Import Ascii String. Open Scope string_scope.
 Require Import List. Import ListNotations.
+Require Import Program.Equality.
 
 Local Ltac invert H := inversion H; subst; clear H.
 
@@ -64,6 +65,9 @@ Inductive regexp_match : list ascii -> regexp -> Prop :=
 
   where "s =~ re" := (regexp_match s re).
 
+Definition equiv (re re' : regexp) := forall s,
+  s =~ re <-> s =~ re'.
+
 Lemma MEmptySet_not : forall s,
   ~ (s =~ EmptySet).
 Proof.
@@ -86,67 +90,129 @@ Lemma MCat_EmptySet_r : forall re s,
 Proof.
   unfold not. intros. invert H. invert H4. Qed.
 
-Lemma MCat_EmptyStr_l : forall re s,
-  s =~ Cat EmptyStr re <-> s =~ re.
+Lemma MCat_EmptyStr_l : forall re,
+  equiv (Cat EmptyStr re) re.
 Proof.
   split; intros.
   - invert H. invert H3. assumption.
   - rewrite <- (app_nil_l _). apply MCat. apply MEmptyStr. assumption. Qed.
 
-Lemma MCat_EmptyStr_r : forall re s,
-  s =~ Cat re EmptyStr <-> s =~ re.
+Lemma MCat_EmptyStr_r : forall re,
+  equiv (Cat re EmptyStr) re.
 Proof.
   split; intros.
-  - invert H. invert H4. rewrite app_nil_r. assumption.
-  - rewrite <- (app_nil_r _). apply MCat. assumption. apply MEmptyStr. Qed.
+  - invert H. invert H4. now rewrite app_nil_r.
+  - rewrite <- (app_nil_r _). now apply MCat, MEmptyStr. Qed.
 
-Lemma MAlt : forall s re1 re2,
+Theorem Cat_Alt_distr_l : forall re1 re2 re3,
+  equiv (Cat re1 (Alt re2 re3)) (Alt (Cat re1 re2) (Cat re1 re3)).
+Proof.
+  split; intros.
+  - invert H; invert H4; [apply MAltL | apply MAltR]; now apply MCat.
+  - invert H; invert H2; [apply MCat, MAltL | apply MCat, MAltR]; assumption.
+Qed.
+
+Theorem Cat_Alt_distr_r : forall re1 re2 re3,
+  equiv (Cat (Alt re1 re2) re3) (Alt (Cat re1 re3) (Cat re2 re3)).
+Proof.
+  split; intros.
+  - invert H; invert H3; [apply MAltL | apply MAltR]; now apply MCat.
+  - invert H; invert H2; apply MCat; try assumption; [now apply MAltL | now apply MAltR].
+Qed.
+
+Lemma MAlt : forall re1 re2 s,
   s =~ Alt re1 re2 <-> s =~ re1 \/ s =~ re2.
 Proof.
   split; intros.
   - invert H; [left | right]; assumption.
   - destruct H; [apply MAltL | apply MAltR]; assumption. Qed.
 
-Lemma MAlt_EmptySet_l : forall re s,
-  s =~ Alt EmptySet re <-> s =~ re.
+Theorem Alt_comm : forall re1 re2,
+  equiv (Alt re1 re2) (Alt re2 re1).
+Proof.
+  split; intros;
+  (invert H; [apply MAltR | apply MAltL]); assumption. Qed.
+
+Theorem Alt_assoc : forall re1 re2 re3,
+  equiv (Alt re1 (Alt re2 re3)) (Alt (Alt re1 re2) re3).
+Proof.
+  split; intros.
+  - invert H. now apply MAltL, MAltL.
+    invert H2. now apply MAltL, MAltR. now apply MAltR.
+  - invert H. invert H2. now apply MAltL.
+    now apply MAltR, MAltL. now apply MAltR, MAltR.
+Qed.
+
+Lemma MAlt_EmptySet_l : forall re,
+  equiv (Alt EmptySet re) re.
 Proof.
   split; intros.
   - invert H. invert H2. assumption.
   - apply MAltR. assumption. Qed.
 
-Lemma MAlt_EmptySet_r : forall re s,
-  s =~ Alt re EmptySet <-> s =~ re.
+Lemma MAlt_EmptySet_r : forall re,
+  equiv (Alt re EmptySet) re.
 Proof.
   split; intros.
   - invert H. assumption. invert H2.
   - apply MAltL. assumption. Qed.
 
-Lemma MStar1 : forall s re,
+Theorem MStar1 : forall re s,
   s =~ re -> s =~ Star re.
 Proof.
-  intros. rewrite <- (app_nil_r _). apply MStarCat, MStar0. assumption. Qed.
+  intros. rewrite <- (app_nil_r _). now apply MStarCat, MStar0. Qed.
 
-Lemma MStar_EmptySet : forall s,
-  s =~ Star EmptySet <-> s =~ EmptyStr.
+Theorem Star_idemp : forall re,
+  equiv (Star (Star re)) (Star re).
+Admitted.
+
+Lemma MStar_EmptySet :
+  equiv (Star EmptySet) (EmptyStr).
 Proof.
   split; intros.
   - invert H. apply MEmptyStr. invert H1.
   - invert H. apply MStar0. Qed.
 
-Lemma MClass0 : forall s,
-  s =~ Class [] <-> s =~ EmptySet.
+Theorem Star_Alt_EmptyStr_l : forall re,
+  equiv (Star (Alt EmptyStr re)) (Star re).
+Proof.
+  split; intros;
+  dependent induction H; try apply MStar0.
+  - invert H.
+    + invert H3. apply IHregexp_match2. reflexivity.
+    + apply MStarCat. assumption. apply IHregexp_match2. reflexivity.
+  - apply MStarCat.
+    + now apply MAltR.
+    + apply IHregexp_match2. reflexivity.
+Qed.
+
+Theorem Star_Alt_EmptyStr_r : forall re,
+  equiv (Star (Alt re EmptyStr)) (Star re).
+Proof.
+  split; intros;
+  dependent induction H; try apply MStar0.
+  - invert H.
+    + apply MStarCat. assumption. apply IHregexp_match2. reflexivity.
+    + invert H3. apply IHregexp_match2. reflexivity.
+  - apply MStarCat.
+    + now apply MAltL.
+    + apply IHregexp_match2. reflexivity.
+Qed.
+
+Lemma MClass0 :
+  equiv (Class []) (EmptySet).
 Proof.
   split; intros; invert H. invert H2. Qed.
 
-Lemma MClass1 : forall c s,
-  s =~ Class [c] <-> s =~ Lit c.
+Lemma MClass1 : forall c,
+  equiv (Class [c]) (Lit c).
 Proof.
   split; intros; invert H.
   - invert H2. apply MLit. invert H.
   - apply MClass, in_eq. Qed.
 
-Lemma MClassN : forall c cs s,
-  s =~ Class (c :: cs) <-> s =~ Alt (Lit c) (Class cs).
+Lemma MClassN : forall c cs,
+  equiv (Class (c :: cs)) (Alt (Lit c) (Class cs)).
 Proof.
   split; intros;
   invert H; invert H2.
