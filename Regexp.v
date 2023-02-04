@@ -12,7 +12,8 @@ Inductive regexp :=
   | Class (cs : list ascii)
   | Star (re : regexp)
   | Cat (re1 re2 : regexp)
-  | Alt (re1 re2 : regexp).
+  | Alt (re1 re2 : regexp)
+  | Inter (re1 re2 : regexp).
 
 Declare Custom Entry regexp.
 Declare Scope regexp_scope.
@@ -25,6 +26,7 @@ Notation "[ c1 , c2 , .. , cn ]" := (Class (cons c1 (cons c2 .. (cons cn nil) ..
 Notation "re *" := (Star re) (in custom regexp at level 35, left associativity, format "re *") : regexp_scope.
 Notation "re1 ; re2" := (Cat re1 re2) (in custom regexp at level 40, left associativity) : regexp_scope.
 Notation "re1 | re2" := (Alt re1 re2) (in custom regexp at level 50, left associativity) : regexp_scope.
+Notation "re1 & re2" := (Inter re1 re2) (in custom regexp at level 45, left associativity) : regexp_scope.
 
 Fixpoint regexp_of_string (s : string) : regexp :=
   match s with
@@ -62,6 +64,10 @@ Inductive regexp_match : list ascii -> regexp -> Prop :=
   | MAltR s2 re1 re2 :
       s2 =~ re2 ->
       s2 =~ Alt re1 re2
+  | MInter s re1 re2 :
+      s =~ re1 ->
+      s =~ re2 ->
+      s =~ Inter re1 re2
 
   where "s =~ re" := (regexp_match s re).
 
@@ -273,6 +279,7 @@ Fixpoint is_empty_set (re : regexp) : bool :=
   | Star _ => false
   | Cat re1 re2 => is_empty_set re1 || is_empty_set re2
   | Alt re1 re2 => is_empty_set re1 && is_empty_set re2
+  | Inter re1 re2 => is_empty_set re1 || is_empty_set re2
   end.
 
 Fixpoint is_empty_str (re : regexp) : bool :=
@@ -284,6 +291,7 @@ Fixpoint is_empty_str (re : regexp) : bool :=
   | Star re => is_empty_set re
   | Cat re1 re2 => is_empty_str re1 && is_empty_str re2
   | Alt re1 re2 => is_empty_str re1 && is_empty_str re2
+  | Inter re1 re2 => is_empty_str re1 && is_empty_str re2
   end.
 
 Theorem match_empty_set : forall re,
@@ -303,6 +311,10 @@ Proof.
       invert H0.
       * apply (IHre1 H1 _) in H4. invert H4.
       * apply (IHre2 H2 _) in H4. invert H4.
+    + invert H0.
+      apply orb_true_iff in H as [].
+      * now apply (IHre1 H).
+      * now apply (IHre2 H).
   - intros. invert H0.
 Qed.
 
@@ -315,21 +327,27 @@ Proof.
     + invert H0.
       * apply MEmptyStr.
       * apply (match_empty_set _ H) in H2. invert H2.
+    + invert H0.
+      apply andb_true_iff in H as [H1 H2].
+      apply (IHre1 H1 _) in H4. invert H4.
+      apply (IHre2 H2 _) in H5. invert H5. apply MEmptyStr.
     + apply andb_true_iff in H as [H1 H2].
-      invert H0.
-      apply (IHre1 H1 _) in H5. invert H5.
-      apply (IHre2 H2 _) in H6. invert H6.
-      apply MEmptyStr.
-    + apply andb_true_iff in H as [H1 H2].
-      invert H0; [apply (IHre1 H1 _ H4) | apply (IHre2 H2 _ H4)].
+      invert H0; [now apply (IHre1 H1 ) | now apply (IHre2 H2)].
+    + invert H0.
+      apply andb_true_iff in H as [H1 H2].
+      now apply (IHre1 H1).
   - induction re; cbn in *; intros; try intuition;
     invert H0.
     + apply MStar0.
     + apply andb_true_iff in H as [H1 H2].
       rewrite <- (app_nil_r _).
-      apply MCat; [apply (IHre1 H1 _) | apply (IHre2 H2 _)]; apply MEmptyStr.
+      apply MCat; [apply (IHre1 H1) | apply (IHre2 H2)]; apply MEmptyStr.
     + apply andb_true_iff in H as [H1 H2].
       apply MAltL, (IHre1 H1 _), MEmptyStr.
+    + apply andb_true_iff in H as [H1 H2].
+      apply MInter.
+      * now apply IHre1, MEmptyStr.
+      * now apply IHre2, MEmptyStr.
 Qed.
 
 Theorem Cat_empty_set_l : forall re1 re2,
@@ -375,6 +393,7 @@ Fixpoint split_first (re : regexp) : option (list ascii * regexp) :=
       | Some (cs1, re1'), Some (cs2, re2') => Some (cs1 ++ cs2, Alt re1' re2')
       | _, _ => None
       end
+  | Inter re1 re2 => (* TODO *) None
   end.
 
 Fixpoint split_last (re : regexp) : option (list ascii * regexp) :=
@@ -395,6 +414,7 @@ Fixpoint split_last (re : regexp) : option (list ascii * regexp) :=
       | Some (cs1, re1'), Some (cs2, re2') => Some (cs1 ++ cs2, Alt re1' re2')
       | _, _ => None
       end
+  | Inter re1 re2 => (* TODO *) None
   end.
 
 Lemma cat_split_first : forall re cs re',
