@@ -197,15 +197,15 @@ Proof.
     + now apply IHregexp_match2.
 Qed.
 
-Theorem Cat_EmptySet_l : forall re s,
-  ~ (s =~ Cat EmptySet re).
+Theorem Cat_EmptySet_l : forall re,
+  equiv (Cat EmptySet re) EmptySet.
 Proof.
-  unfold not. intros. invert H. invert H3. Qed.
+  split; intros; invert H. invert H3. Qed.
 
-Theorem Cat_EmptySet_r : forall re s,
-  ~ (s =~ Cat re EmptySet).
+Theorem Cat_EmptySet_r : forall re,
+  equiv (Cat re EmptySet) EmptySet.
 Proof.
-  unfold not. intros. invert H. invert H4. Qed.
+  split; intros; invert H. invert H4. Qed.
 
 Theorem Cat_EmptyStr_l : forall re,
   equiv (Cat EmptyStr re) re.
@@ -474,5 +474,53 @@ Proof.
       invert H. invert H0.
       * apply IHre1. Admitted.
 
-Fixpoint normalize (re : regexp) : regexp.
-Admitted.
+Fixpoint is_normalized (re : regexp) : bool :=
+  match re with
+  | EmptySet | EmptyStr | Lit _ => true
+  | Class [] => false
+  | Class _ => true
+  | Star (EmptySet | EmptyStr | Star _)
+  | Star (Alt EmptyStr _ | Alt _ EmptyStr) => false
+  | Star re => is_normalized re
+  | Cat EmptySet _ | Cat _ EmptySet | Cat EmptyStr _ | Cat _ EmptyStr => false
+  | Cat re1 re2 => is_normalized re1 || is_normalized re2
+  | Alt EmptySet _ | Alt _ EmptySet
+  | Alt (Lit _ | Class _) (Lit _ | Class _) => false
+  | Alt re1 re2 => is_normalized re1 && is_normalized re2
+  | Inter EmptySet _ | Inter _ EmptySet => false
+  | Inter re1 re2 => is_normalized re1 && is_normalized re2
+  end.
+
+Fixpoint normalize (re : regexp) : regexp :=
+  match re with
+  | EmptySet | EmptyStr | Lit _ => re
+  | Class [] => EmptySet
+  | Class _ => re
+  | Star re =>
+      match normalize re with
+      | EmptySet | EmptyStr => EmptyStr
+      | Star re' => Star re'
+      | Alt EmptyStr re' | Alt re' EmptyStr => Star re'
+      | re' => Star re'
+      end
+  | Cat re1 re2 =>
+      match normalize re1, normalize re2 with
+      | EmptySet, _ | _, EmptySet => EmptySet
+      | EmptyStr, re' | re', EmptyStr => re'
+      | re1', re2' => Cat re1' re2'
+      end
+  | Alt re1 re2 =>
+      match normalize re1, normalize re2 with
+      | EmptySet, re' | re', EmptySet => re'
+      | Lit c1, Lit c2 => Class [c1; c2]
+      | Lit c1, Class cs2 => Class (c1 :: cs2)
+      | Class cs1, Lit c2 => Class (cs1 ++ [c2])
+      | Class cs1, Class cs2 => Class (cs1 ++ cs2)
+      | re1', re2' => Alt re1' re2'
+      end
+  | Inter re1 re2 =>
+      match normalize re1, normalize re2 with
+      | EmptySet, _ | _, EmptySet => EmptySet
+      | re1', re2' => Inter re1' re2'
+      end
+  end.
