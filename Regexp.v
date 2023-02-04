@@ -22,7 +22,7 @@ Notation "'∅'" := EmptySet (in custom regexp) : regexp_scope.
 Notation "'ε'" := EmptyStr (in custom regexp) : regexp_scope.
 Notation "re1 ; re2" := (Cat re1 re2) (in custom regexp at level 40, left associativity) : regexp_scope.
 Notation "re1 | re2" := (Alt re1 re2) (in custom regexp at level 50, left associativity) : regexp_scope.
-Notation "re *" := (Star re) (in custom regexp at level 35, right associativity, format "re *") : regexp_scope.
+Notation "re *" := (Star re) (in custom regexp at level 35, left associativity, format "re *") : regexp_scope.
 Notation "[ c1 , c2 , .. , cn ]" := (Class (cons c1 (cons c2 .. (cons cn nil) ..))) (in custom regexp) : regexp_scope.
 
 Fixpoint regexp_of_string (s : string) : regexp :=
