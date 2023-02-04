@@ -1,4 +1,4 @@
-VFILES := Regexp.v
+VFILES := Utf8.v Regexp.v
 
 build: Makefile.coq
 	$(MAKE) -f Makefile.coq
