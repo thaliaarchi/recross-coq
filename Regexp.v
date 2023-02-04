@@ -281,12 +281,8 @@ Qed.
 
 Fixpoint is_empty_set (re : regexp) : bool :=
   match re with
-  | EmptySet => true
-  | EmptyStr => false
-  | Lit _ => false
-  | Class [] => true
-  | Class _ => false
-  | Star _ => false
+  | EmptySet | Class [] => true
+  | EmptyStr | Lit _ | Class _ | Star _ => false
   | Cat re1 re2 => is_empty_set re1 || is_empty_set re2
   | Alt re1 re2 => is_empty_set re1 && is_empty_set re2
   | Inter re1 re2 => is_empty_set re1 || is_empty_set re2
@@ -294,40 +290,21 @@ Fixpoint is_empty_set (re : regexp) : bool :=
 
 Fixpoint is_empty_str (re : regexp) : bool :=
   match re with
-  | EmptySet => false
   | EmptyStr => true
-  | Lit _ => false
-  | Class _ => false
+  | EmptySet | Lit _ | Class _ => false
   | Star re => is_empty_set re
   | Cat re1 re2 => is_empty_str re1 && is_empty_str re2
   | Alt re1 re2 => is_empty_str re1 && is_empty_str re2
   | Inter re1 re2 => is_empty_str re1 && is_empty_str re2
   end.
 
-Definition has_empty_set (re : regexp) : bool :=
-  match re with
-  | EmptySet | EmptyStr | Lit _ | Class _ => false
-  | Star re => is_empty_set re
-  | Cat re1 re2 => is_empty_set re1 || is_empty_set re2
-  | Alt re1 re2 => is_empty_set re1 || is_empty_set re2
-  | Inter re1 re2 => is_empty_set re1 || is_empty_set re2
-  end.
-
-Definition has_empty_str (re : regexp) : bool :=
-  match re with
-  | EmptySet | EmptyStr | Lit _ | Class _ => false
-  | Star re => is_empty_str re
-  | Cat re1 re2 => is_empty_str re1 || is_empty_str re2
-  | Alt re1 re2 => false (* for optional *)
-  | Inter re1 re2 => is_empty_str re1 || is_empty_set re2
-  end.
-
 Fixpoint matches_empty_str (re : regexp) : bool :=
   match re with
-  | Star _ => true
-  | Alt re1 re2 => is_empty_str re1 || is_empty_str re2
+  | EmptySet | Lit _ | Class _ => false
+  | EmptyStr | Star _ => true
+  | Cat re1 re2 => matches_empty_str re1 && matches_empty_str re2
+  | Alt re1 re2 => matches_empty_str re1 || matches_empty_str re2
   | Inter re1 re2 => matches_empty_str re1 && matches_empty_str re2
-  | _ => is_empty_str re
   end.
 
 Theorem match_empty_set : forall re,
@@ -479,48 +456,95 @@ Fixpoint is_normalized (re : regexp) : bool :=
   | EmptySet | EmptyStr | Lit _ => true
   | Class [] => false
   | Class _ => true
-  | Star (EmptySet | EmptyStr | Star _)
-  | Star (Alt EmptyStr _ | Alt _ EmptyStr) => false
+  | Star (EmptySet | EmptyStr | Star _) => false
+  (* | Star (Alt EmptyStr _ | Alt _ EmptyStr) => false *)
   | Star re => is_normalized re
-  | Cat EmptySet _ | Cat _ EmptySet | Cat EmptyStr _ | Cat _ EmptyStr => false
+  | Cat (EmptySet | EmptyStr) _ | Cat _ (EmptySet | EmptyStr) => false
   | Cat re1 re2 => is_normalized re1 || is_normalized re2
   | Alt EmptySet _ | Alt _ EmptySet
+  | Alt EmptyStr (EmptyStr | Star _) | Alt (Star _) EmptyStr => false
+  (* | Alt EmptyStr re | Alt re EmptyStr => negb (matches_empty_str re) && is_normalized re *)
   | Alt (Lit _ | Class _) (Lit _ | Class _) => false
   | Alt re1 re2 => is_normalized re1 && is_normalized re2
   | Inter EmptySet _ | Inter _ EmptySet => false
   | Inter re1 re2 => is_normalized re1 && is_normalized re2
   end.
 
-Fixpoint normalize (re : regexp) : regexp :=
-  match re with
-  | EmptySet | EmptyStr | Lit _ => re
-  | Class [] => EmptySet
-  | Class _ => re
-  | Star re =>
-      match normalize re with
-      | EmptySet | EmptyStr => EmptyStr
-      | Star re' => Star re'
-      | Alt EmptyStr re' | Alt re' EmptyStr => Star re'
-      | re' => Star re'
-      end
-  | Cat re1 re2 =>
-      match normalize re1, normalize re2 with
-      | EmptySet, _ | _, EmptySet => EmptySet
-      | EmptyStr, re' | re', EmptyStr => re'
-      | re1', re2' => Cat re1' re2'
-      end
-  | Alt re1 re2 =>
-      match normalize re1, normalize re2 with
-      | EmptySet, re' | re', EmptySet => re'
-      | Lit c1, Lit c2 => Class [c1; c2]
-      | Lit c1, Class cs2 => Class (c1 :: cs2)
-      | Class cs1, Lit c2 => Class (cs1 ++ [c2])
-      | Class cs1, Class cs2 => Class (cs1 ++ cs2)
-      | re1', re2' => Alt re1' re2'
-      end
-  | Inter re1 re2 =>
-      match normalize re1, normalize re2 with
-      | EmptySet, _ | _, EmptySet => EmptySet
-      | re1', re2' => Inter re1' re2'
-      end
+Definition Class_norm (cs : list ascii) : regexp :=
+  match cs with
+  | [] => EmptySet
+  | _ => Class cs
   end.
+
+Definition Star_norm (re : regexp) (Hnorm : is_normalized re = true) : regexp :=
+  match re with
+  | EmptySet | EmptyStr => EmptyStr
+  | Star re => Star re
+  (* | Alt EmptyStr re | Alt re EmptyStr => Star re *)
+  | _ => Star re
+  end.
+
+Definition Cat_norm (re1 re2 : regexp) (Hnorm1 : is_normalized re1 = true)
+                                       (Hnorm2 : is_normalized re2 = true) : regexp :=
+  match re1, re2 with
+  | EmptySet, _ | _, EmptySet => EmptySet
+  | EmptyStr, re | re, EmptyStr => re
+  | _, _ => Cat re1 re2
+  end.
+
+Definition Alt_norm (re1 re2 : regexp) (Hnorm1 : is_normalized re1 = true)
+                                       (Hnorm2 : is_normalized re2 = true) : regexp :=
+  match re1, re2 with
+  | EmptySet, re | re, EmptySet => re
+  | EmptyStr, EmptyStr => EmptyStr
+  | EmptyStr, Star re | Star re, EmptyStr => Star re
+  (* | EmptyStr, re | re, EmptyStr => if matches_empty_str re then re else Alt EmptyStr re *)
+  | Lit c1, Lit c2 => Class [c1; c2]
+  | Lit c1, Class cs2 => Class (c1 :: cs2)
+  | Class cs1, Lit c2 => Class (cs1 ++ [c2])
+  | Class cs1, Class cs2 => Class (cs1 ++ cs2)
+  | _, _ => Alt re1 re2
+  end.
+
+Definition Inter_norm (re1 re2 : regexp) (Hnorm1 : is_normalized re1 = true)
+                                         (Hnorm2 : is_normalized re2 = true) : regexp :=
+  match re1, re2 with
+  | EmptySet, _ | _, EmptySet => EmptySet
+  | _, _ => Inter re1 re2
+  end.
+
+Theorem Class_norm_is_normalized : forall cs,
+  is_normalized (Class_norm cs) = true.
+Proof. now destruct cs. Qed.
+
+Theorem Star_norm_is_normalized : forall re
+  (Hnorm : is_normalized re = true),
+  is_normalized (Star_norm re Hnorm) = true.
+Proof. now destruct re. Qed.
+
+Theorem Cat_norm_is_normalized : forall re1 re2
+  (Hnorm1 : is_normalized re1 = true)
+  (Hnorm2 : is_normalized re2 = true),
+  is_normalized (Cat_norm re1 re2 Hnorm1 Hnorm2) = true.
+Proof.
+  intros. destruct re1, re2;
+  try destruct cs; try (cbn in *; rewrite Hnorm1); intuition.
+Qed.
+
+Theorem Alt_norm_is_normalized : forall re1 re2
+  (Hnorm1 : is_normalized re1 = true)
+  (Hnorm2 : is_normalized re2 = true),
+  is_normalized (Alt_norm re1 re2 Hnorm1 Hnorm2) = true.
+Proof.
+  intros. destruct re1, re2;
+  try destruct cs; try (cbn in *; rewrite Hnorm1); intuition.
+Qed.
+
+Theorem Inter_norm_is_normalized : forall re1 re2
+  (Hnorm1 : is_normalized re1 = true)
+  (Hnorm2 : is_normalized re2 = true),
+  is_normalized (Inter_norm re1 re2 Hnorm1 Hnorm2) = true.
+Proof.
+  intros. destruct re1, re2;
+  try destruct cs; try (cbn in *; rewrite Hnorm1); intuition.
+Qed.
