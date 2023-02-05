@@ -451,6 +451,51 @@ Proof.
       invert H. invert H0.
       * apply IHre1. Admitted.
 
+Reserved Notation "re -->n re'" (at level 40).
+Reserved Notation "re -->*n re'" (at level 40).
+
+Inductive normalize_step : regexp -> regexp -> Prop :=
+  | NEmptySet :                              EmptySet                   -->n EmptySet
+
+  | NEmptyStr :                              EmptyStr                   -->n EmptyStr
+
+  | NLit c :                                 Lit c                      -->n Lit c
+
+  | NClass0 :                                Class []                   -->n EmptySet
+  | NClassN cs :                 cs <> [] -> Class cs                   -->n Class cs
+
+  | NStarEmptySet :                          Star EmptySet              -->n EmptyStr
+  | NStarEmptyStr :                          Star EmptyStr              -->n EmptyStr
+  | NStarStar re :                           Star (Star re)             -->n Star re
+
+  | NCatEmptySetL re :                       Cat EmptySet re            -->n EmptySet
+  | NCatEmptySetR re :                       Cat re EmptySet            -->n EmptySet
+  | NCatEmptyStrL re :                       Cat EmptyStr re            -->n re
+  | NCatEmptyStrR re :                       Cat re EmptyStr            -->n re
+  | NCatStarEquiv re1 re2 : equiv re1 re2 -> Cat (Star re1) (Star re2)  -->n Star re1
+
+  | NAltEquiv re1 re2 :     equiv re1 re2 -> Alt re1 re2                -->n re1
+  | NAltEmptySetL re :                       Alt EmptySet re            -->n re
+  | NAltEmptySetR re :                       Alt re EmptySet            -->n re
+  | NAltEmptyStrR re :                       Alt re EmptyStr            -->n Alt EmptyStr re
+  | NAltEmptyStrStar re :                    Alt EmptyStr (Star re)     -->n Star re
+  | NAltAltEmptyStr re1 re2 :                Alt (Alt EmptyStr re1) re2 -->n Alt EmptyStr (Alt re1 re2)
+
+  | NInterEquiv re1 re2 :   equiv re1 re2 -> Inter re1 re2              -->n re1
+  | NInterEmptySetL re :                     Inter EmptySet re          -->n EmptySet
+  | NInterEmptySetR re :                     Inter re EmptySet          -->n EmptySet
+
+  where "re -->n re'" := (normalize_step re re').
+
+Inductive normalize : regexp -> regexp -> Prop :=
+  | normalize_refl re :
+      re -->*n re
+  | normalize_trans re1 re2 re3 :
+      re1 -->n re2 ->
+      re2 -->*n re3 ->
+      re1 -->*n re3
+  where "re -->*n re'" := (normalize re re').
+
 Fixpoint is_normalized (re : regexp) : bool :=
   match re with
   | EmptySet | EmptyStr | Lit _ => true
