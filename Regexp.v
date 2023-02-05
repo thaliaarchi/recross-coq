@@ -13,7 +13,7 @@ Inductive regexp :=
   | Star (re : regexp)
   | Cat (re1 re2 : regexp)
   | Alt (re1 re2 : regexp)
-  | Inter (re1 re2 : regexp).
+  | And (re1 re2 : regexp).
 
 Declare Custom Entry regexp.
 Declare Scope regexp_scope.
@@ -26,7 +26,7 @@ Notation "[ c1 , c2 , .. , cn ]" := (Class (cons c1 (cons c2 .. (cons cn nil) ..
 Notation "re *" := (Star re) (in custom regexp at level 35, left associativity, format "re *") : regexp_scope.
 Notation "re1 ; re2" := (Cat re1 re2) (in custom regexp at level 40, left associativity) : regexp_scope.
 Notation "re1 | re2" := (Alt re1 re2) (in custom regexp at level 50, left associativity) : regexp_scope.
-Notation "re1 & re2" := (Inter re1 re2) (in custom regexp at level 45, left associativity) : regexp_scope.
+Notation "re1 & re2" := (And re1 re2) (in custom regexp at level 45, left associativity) : regexp_scope.
 
 Fixpoint regexp_of_string (s : string) : regexp :=
   match s with
@@ -64,10 +64,10 @@ Inductive regexp_match : list ascii -> regexp -> Prop :=
   | MAltR s2 re1 re2 :
       s2 =~ re2 ->
       s2 =~ Alt re1 re2
-  | MInter s re1 re2 :
+  | MAnd s re1 re2 :
       s =~ re1 ->
       s =~ re2 ->
-      s =~ Inter re1 re2
+      s =~ And re1 re2
 
   where "s =~ re" := (regexp_match s re).
 
@@ -285,7 +285,7 @@ Fixpoint is_empty_set (re : regexp) : bool :=
   | EmptyStr | Lit _ | Class _ | Star _ => false
   | Cat re1 re2 => is_empty_set re1 || is_empty_set re2
   | Alt re1 re2 => is_empty_set re1 && is_empty_set re2
-  | Inter re1 re2 => is_empty_set re1 || is_empty_set re2
+  | And re1 re2 => is_empty_set re1 || is_empty_set re2
   end.
 
 Fixpoint is_empty_str (re : regexp) : bool :=
@@ -295,7 +295,7 @@ Fixpoint is_empty_str (re : regexp) : bool :=
   | Star re => is_empty_set re
   | Cat re1 re2 => is_empty_str re1 && is_empty_str re2
   | Alt re1 re2 => is_empty_str re1 && is_empty_str re2
-  | Inter re1 re2 => is_empty_str re1 && is_empty_str re2
+  | And re1 re2 => is_empty_str re1 && is_empty_str re2
   end.
 
 Fixpoint matches_empty_str (re : regexp) : bool :=
@@ -304,7 +304,7 @@ Fixpoint matches_empty_str (re : regexp) : bool :=
   | EmptyStr | Star _ => true
   | Cat re1 re2 => matches_empty_str re1 && matches_empty_str re2
   | Alt re1 re2 => matches_empty_str re1 || matches_empty_str re2
-  | Inter re1 re2 => matches_empty_str re1 && matches_empty_str re2
+  | And re1 re2 => matches_empty_str re1 && matches_empty_str re2
   end.
 
 Theorem match_empty_set : forall re,
@@ -358,7 +358,7 @@ Proof.
     + apply andb_true_iff in H as [H1 H2].
       apply MAltL, (IHre1 H1 _), MEmptyStr.
     + apply andb_true_iff in H as [H1 H2].
-      apply MInter.
+      apply MAnd.
       * now apply IHre1, MEmptyStr.
       * now apply IHre2, MEmptyStr.
 Qed.
@@ -406,7 +406,7 @@ Fixpoint split_first (re : regexp) : option (list ascii * regexp) :=
       | Some (cs1, re1'), Some (cs2, re2') => Some (cs1 ++ cs2, Alt re1' re2')
       | _, _ => None
       end
-  | Inter re1 re2 => (* TODO *) None
+  | And re1 re2 => (* TODO *) None
   end.
 
 Fixpoint split_last (re : regexp) : option (list ascii * regexp) :=
@@ -427,7 +427,7 @@ Fixpoint split_last (re : regexp) : option (list ascii * regexp) :=
       | Some (cs1, re1'), Some (cs2, re2') => Some (cs1 ++ cs2, Alt re1' re2')
       | _, _ => None
       end
-  | Inter re1 re2 => (* TODO *) None
+  | And re1 re2 => (* TODO *) None
   end.
 
 Lemma cat_split_first : forall re cs re',
@@ -481,9 +481,9 @@ Inductive normalize_step : regexp -> regexp -> Prop :=
   | NAltEmptyStrStar re :                    Alt EmptyStr (Star re)     -->n Star re
   | NAltAltEmptyStr re1 re2 :                Alt (Alt EmptyStr re1) re2 -->n Alt EmptyStr (Alt re1 re2)
 
-  | NInterEquiv re1 re2 :   equiv re1 re2 -> Inter re1 re2              -->n re1
-  | NInterEmptySetL re :                     Inter EmptySet re          -->n EmptySet
-  | NInterEmptySetR re :                     Inter re EmptySet          -->n EmptySet
+  | NAndEquiv re1 re2 :     equiv re1 re2 -> And re1 re2                -->n re1
+  | NAndEmptySetL re :                       And EmptySet re            -->n EmptySet
+  | NAndEmptySetR re :                       And re EmptySet            -->n EmptySet
 
   where "re -->n re'" := (normalize_step re re').
 
@@ -511,8 +511,8 @@ Fixpoint is_normalized (re : regexp) : bool :=
   (* | Alt EmptyStr re | Alt re EmptyStr => negb (matches_empty_str re) && is_normalized re *)
   | Alt (Lit _ | Class _) (Lit _ | Class _) => false
   | Alt re1 re2 => is_normalized re1 && is_normalized re2
-  | Inter EmptySet _ | Inter _ EmptySet => false
-  | Inter re1 re2 => is_normalized re1 && is_normalized re2
+  | And EmptySet _ | And _ EmptySet => false
+  | And re1 re2 => is_normalized re1 && is_normalized re2
   end.
 
 Definition Class_norm (cs : list ascii) : regexp :=
@@ -551,11 +551,11 @@ Definition Alt_norm (re1 re2 : regexp) (Hnorm1 : is_normalized re1 = true)
   | _, _ => Alt re1 re2
   end.
 
-Definition Inter_norm (re1 re2 : regexp) (Hnorm1 : is_normalized re1 = true)
-                                         (Hnorm2 : is_normalized re2 = true) : regexp :=
+Definition And_norm (re1 re2 : regexp) (Hnorm1 : is_normalized re1 = true)
+                                       (Hnorm2 : is_normalized re2 = true) : regexp :=
   match re1, re2 with
   | EmptySet, _ | _, EmptySet => EmptySet
-  | _, _ => Inter re1 re2
+  | _, _ => And re1 re2
   end.
 
 Theorem Class_norm_is_normalized : forall cs,
@@ -585,10 +585,10 @@ Proof.
   try destruct cs; try (cbn in *; rewrite Hnorm1); intuition.
 Qed.
 
-Theorem Inter_norm_is_normalized : forall re1 re2
+Theorem And_norm_is_normalized : forall re1 re2
   (Hnorm1 : is_normalized re1 = true)
   (Hnorm2 : is_normalized re2 = true),
-  is_normalized (Inter_norm re1 re2 Hnorm1 Hnorm2) = true.
+  is_normalized (And_norm re1 re2 Hnorm1 Hnorm2) = true.
 Proof.
   intros. destruct re1, re2;
   try destruct cs; try (cbn in *; rewrite Hnorm1); intuition.
