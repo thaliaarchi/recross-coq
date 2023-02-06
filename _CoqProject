@@ -1,1 +1,3 @@
--Q . Recross
+-Q theories recross
+theories/utf8.v
+theories/regexp.v
