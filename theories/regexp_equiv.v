@@ -1,6 +1,105 @@
 Require Import Bool.
 From recross Require Import util regexp.
 
+Theorem is_void_true : forall re,
+  is_void re = true -> re <=> Void.
+Proof.
+  split; generalize dependent s.
+  - induction re; cbn in *; intros; try intuition.
+    + destruct cs.
+      * invert H0. destruct (in_nil H3).
+      * discriminate.
+    + invert H0.
+      apply orb_true_iff in H as [].
+      * apply (IHre1 H _) in H4. invert H4.
+      * apply (IHre2 H _) in H5. invert H5.
+    + apply andb_true_iff in H as [H1 H2].
+      invert H0.
+      * apply (IHre1 H1 _) in H4. invert H4.
+      * apply (IHre2 H2 _) in H4. invert H4.
+    + invert H0.
+      apply orb_true_iff in H as [].
+      * now apply (IHre1 H).
+      * now apply (IHre2 H).
+  - intros. invert H0.
+Qed.
+
+Theorem is_nil_true : forall re,
+  is_nil re = true -> re <=> Nil.
+Proof.
+  split; generalize dependent s.
+  - induction re; cbn in *; intros; try intuition.
+    + invert H0.
+      * apply MNil.
+      * apply (is_void_true _ H) in H2. invert H2.
+    + invert H0.
+      apply andb_true_iff in H as [H1 H2].
+      apply (IHre1 H1 _) in H4. invert H4.
+      apply (IHre2 H2 _) in H5. invert H5. apply MNil.
+    + apply andb_true_iff in H as [H1 H2].
+      invert H0; [now apply (IHre1 H1 ) | now apply (IHre2 H2)].
+    + invert H0.
+      apply andb_true_iff in H as [H1 H2].
+      now apply (IHre1 H1).
+  - induction re; cbn in *; intros; try intuition;
+    invert H0.
+    + apply MStar0.
+    + apply andb_true_iff in H as [H1 H2].
+      rewrite <- (app_nil_r _).
+      apply MCat; [apply (IHre1 H1) | apply (IHre2 H2)]; apply MNil.
+    + apply andb_true_iff in H as [H1 H2].
+      apply MAltL, (IHre1 H1 _), MNil.
+    + apply andb_true_iff in H as [H1 H2].
+      apply MAnd.
+      * now apply IHre1, MNil.
+      * now apply IHre2, MNil.
+Qed.
+
+Lemma is_nil_matches_nil : forall re,
+  is_nil re = true -> matches_nil re = true.
+Proof.
+  induction re; cbn; intros; try discriminate; try reflexivity;
+  apply andb_true_iff in H as [H1 H2];
+  try (apply andb_true_iff; split); try (apply orb_true_iff; left);
+  try apply IHre2, H2; apply IHre1, H1.
+Qed.
+
+Theorem matches_nil_true : forall re,
+  matches_nil re = true <-> [] =~ re.
+Proof.
+  split.
+  - induction re; cbn; intros; try discriminate.
+    + apply MNil.
+    + apply MStar0.
+    + apply andb_true_iff in H as [H1 H2].
+      rewrite <- (app_nil_r _). apply MCat.
+      apply IHre1, H1. apply IHre2, H2.
+    + apply orb_true_iff in H as [].
+      apply MAltL, IHre1, H. apply MAltR, IHre2, H.
+    + apply andb_true_iff in H as [H1 H2].
+      apply MAnd.
+      apply IHre1, H1. apply IHre2, H2.
+  - induction re; cbn; intros; try reflexivity;
+    try apply andb_true_iff; try apply orb_true_iff;
+    invert H.
+    + apply app_eq_nil in H0 as []. subst.
+      split. now apply IHre1. now apply IHre2.
+    + left. now apply IHre1.
+    + right. now apply IHre2.
+    + split. now apply IHre1. now apply IHre2.
+Qed.
+
+Theorem matches_nil_false : forall re,
+  matches_nil re = false -> ~ ([] =~ re).
+Proof.
+  unfold not.
+  induction re; cbn; intros; try discriminate;
+  invert H0; try (apply app_eq_nil in H1 as []; subst);
+  try apply andb_false_iff in H as [];
+  try apply orb_false_iff in H as [];
+  try (now apply IHre1); try (now apply IHre2).
+Qed.
+
 Lemma Void_not : forall s,
   ~ (s =~ Void).
 Proof.
@@ -200,6 +299,18 @@ Lemma Alt_Void_r : forall re,
 Proof.
   intros. now rewrite Alt_comm, Alt_Void_l. Qed.
 
+Lemma Alt_Nil_l : forall re,
+  matches_nil re = true -> Alt Nil re <=> re.
+Proof.
+  split; intros.
+  - invert H0. invert H3. now apply matches_nil_true. assumption.
+  - now apply MAltR. Qed.
+
+Lemma Alt_Nil_r : forall re,
+  matches_nil re = true -> Alt re Nil <=> re.
+Proof.
+  intros. now rewrite Alt_comm, Alt_Nil_l. Qed.
+
 Lemma Alt_Class : forall cs1 cs2,
   Alt (Class cs1) (Class cs2) <=> Class (cs1 ++ cs2).
 Proof.
@@ -232,119 +343,26 @@ Lemma And_Void_r : forall re,
 Proof.
   intros. now rewrite And_comm, And_Void_l. Qed.
 
-Theorem match_void : forall re,
-  is_void re = true -> re <=> Void.
-Proof.
-  split; generalize dependent s.
-  - induction re; cbn in *; intros; try intuition.
-    + destruct cs.
-      * invert H0. destruct (in_nil H3).
-      * discriminate.
-    + invert H0.
-      apply orb_true_iff in H as [].
-      * apply (IHre1 H _) in H4. invert H4.
-      * apply (IHre2 H _) in H5. invert H5.
-    + apply andb_true_iff in H as [H1 H2].
-      invert H0.
-      * apply (IHre1 H1 _) in H4. invert H4.
-      * apply (IHre2 H2 _) in H4. invert H4.
-    + invert H0.
-      apply orb_true_iff in H as [].
-      * now apply (IHre1 H).
-      * now apply (IHre2 H).
-  - intros. invert H0.
-Qed.
-
-Theorem match_nil : forall re,
-  is_nil re = true -> re <=> Nil.
-Proof.
-  split; generalize dependent s.
-  - induction re; cbn in *; intros; try intuition.
-    + invert H0.
-      * apply MNil.
-      * apply (match_void _ H) in H2. invert H2.
-    + invert H0.
-      apply andb_true_iff in H as [H1 H2].
-      apply (IHre1 H1 _) in H4. invert H4.
-      apply (IHre2 H2 _) in H5. invert H5. apply MNil.
-    + apply andb_true_iff in H as [H1 H2].
-      invert H0; [now apply (IHre1 H1 ) | now apply (IHre2 H2)].
-    + invert H0.
-      apply andb_true_iff in H as [H1 H2].
-      now apply (IHre1 H1).
-  - induction re; cbn in *; intros; try intuition;
-    invert H0.
-    + apply MStar0.
-    + apply andb_true_iff in H as [H1 H2].
-      rewrite <- (app_nil_r _).
-      apply MCat; [apply (IHre1 H1) | apply (IHre2 H2)]; apply MNil.
-    + apply andb_true_iff in H as [H1 H2].
-      apply MAltL, (IHre1 H1 _), MNil.
-    + apply andb_true_iff in H as [H1 H2].
-      apply MAnd.
-      * now apply IHre1, MNil.
-      * now apply IHre2, MNil.
-Qed.
-
-Lemma is_nil_matches_nil : forall re,
-  is_nil re = true -> matches_nil re = true.
-Proof.
-  induction re; cbn; intros; try discriminate; try reflexivity;
-  apply andb_true_iff in H as [H1 H2];
-  try (apply andb_true_iff; split); try (apply orb_true_iff; left);
-  try apply IHre2, H2; apply IHre1, H1.
-Qed.
-
-Theorem matches_nil_true : forall re,
-  matches_nil re = true <-> [] =~ re.
-Proof.
-  split.
-  - induction re; cbn; intros; try discriminate.
-    + apply MNil.
-    + apply MStar0.
-    + apply andb_true_iff in H as [H1 H2].
-      rewrite <- (app_nil_r _). apply MCat.
-      apply IHre1, H1. apply IHre2, H2.
-    + apply orb_true_iff in H as [].
-      apply MAltL, IHre1, H. apply MAltR, IHre2, H.
-    + apply andb_true_iff in H as [H1 H2].
-      apply MAnd.
-      apply IHre1, H1. apply IHre2, H2.
-  - induction re; cbn; intros; try reflexivity;
-    try apply andb_true_iff; try apply orb_true_iff;
-    invert H.
-    + apply app_eq_nil in H0 as []. subst.
-      split. now apply IHre1. now apply IHre2.
-    + left. now apply IHre1.
-    + right. now apply IHre2.
-    + split. now apply IHre1. now apply IHre2.
-Qed.
-
-Theorem matches_nil_false : forall re,
-  matches_nil re = false <-> ~ ([] =~ re).
-Proof.
-  unfold not. split.
-  - induction re; cbn; intros; try discriminate;
-    invert H0; try (apply app_eq_nil in H1 as []; subst);
-    try apply andb_false_iff in H as [];
-    try apply orb_false_iff in H as [];
-    try (now apply IHre1); try (now apply IHre2).
-  - induction re; cbn; intros; try reflexivity.
-    + exfalso. apply H. apply MNil.
-    + exfalso. apply H. apply MStar0.
-    + apply andb_false_iff.
-      induction re1; try (now left).
-      * right. apply IHre2. intros. apply H, Cat_nil.
-        split. apply MNil. assumption.
-      * right. apply IHre2. intros. apply H, Cat_nil.
-        split. apply MStar0. assumption.
-      * left. apply IHre1. intros. apply H. apply Cat_nil.
-        split. assumption.
-Admitted.
-
-Theorem matches_nil_Alt : forall re,
-  matches_nil re = true -> Alt Nil re <=> re.
+Lemma And_Nil_true_l : forall re,
+  matches_nil re = true -> And Nil re <=> Nil.
 Proof.
   split; intros.
-  - invert H0. invert H3. now apply matches_nil_true. assumption.
-  - now apply MAltR. Qed.
+  - invert H0. invert H4. apply MNil.
+  - invert H0. apply MAnd. apply MNil. now apply matches_nil_true in H. Qed.
+
+Lemma And_Nil_true_r : forall re,
+  matches_nil re = true -> And re Nil <=> Nil.
+Proof.
+  intros. now rewrite And_comm, And_Nil_true_l. Qed.
+
+Lemma And_Nil_false_l : forall re,
+  matches_nil re = false -> And Nil re <=> Void.
+Proof.
+  split; intros.
+  - invert H0. invert H4. exfalso. now apply (matches_nil_false _ H).
+  - invert H0. Qed.
+
+Lemma And_Nil_false_r : forall re,
+  matches_nil re = false -> And re Nil <=> Void.
+Proof.
+  intros. now rewrite And_comm, And_Nil_false_l. Qed.
