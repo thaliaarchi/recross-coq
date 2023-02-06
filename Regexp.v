@@ -86,6 +86,66 @@ Proof.
 Definition equiv (re re' : regexp) := forall s,
   s =~ re <-> s =~ re'.
 
+Theorem equiv_refl : forall re,
+  equiv re re.
+Proof. now split. Qed.
+
+Theorem equiv_trans : forall re1 re2 re3,
+  equiv re1 re2 -> equiv re2 re3 -> equiv re1 re3.
+Proof.
+  split; intros.
+  - apply H0. now apply H.
+  - apply H. now apply H0. Qed.
+
+Theorem equiv_assoc : forall re1 re2,
+  equiv re1 re2 <-> equiv re2 re1.
+Proof.
+  split; split; intros; now apply H. Qed.
+
+Theorem Class_subst : forall cs cs',
+  (forall c, In c cs <-> In c cs') ->
+  equiv (Class cs) (Class cs').
+Proof.
+  split; intros;
+  invert H0; apply H in H3; now apply MClass. Qed.
+
+Theorem Star_subst : forall re re',
+  equiv re re' ->
+  equiv (Star re) (Star re').
+Proof.
+  split; intros.
+  - dependent induction H0.
+    + apply MStar0.
+    + apply MStarCat. now apply H. now apply IHregexp_match2 with re.
+  - dependent induction H0.
+    + apply MStar0.
+    + apply MStarCat. now apply H. now apply IHregexp_match2 with re'.
+Qed.
+
+Theorem Cat_subst : forall re1 re1' re2 re2',
+  equiv re1 re1' ->
+  equiv re2 re2' ->
+  equiv (Cat re1 re2) (Cat re1' re2').
+Proof.
+  split; intros;
+  invert H1; (apply MCat; [now apply H | now apply H0]). Qed.
+
+Theorem Alt_subst : forall re1 re1' re2 re2',
+  equiv re1 re1' ->
+  equiv re2 re2' ->
+  equiv (Alt re1 re2) (Alt re1' re2').
+Proof.
+  split; intros;
+  (invert H1; [now apply MAltL, H | now apply MAltR, H0]). Qed.
+
+Theorem And_subst : forall re1 re1' re2 re2',
+  equiv re1 re1' ->
+  equiv re2 re2' ->
+  equiv (And re1 re2) (And re1' re2').
+Proof.
+  split; intros;
+  invert H1; (apply MAnd; [now apply H | now apply H0]). Qed.
+
 Theorem EmptySet_not : forall s,
   ~ (s =~ EmptySet).
 Proof.
