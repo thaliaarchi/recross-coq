@@ -331,6 +331,13 @@ Proof.
   - invert H; invert H2; apply MCat; try assumption; [now apply MAltL | now apply MAltR].
 Qed.
 
+Lemma Cat_nil : forall re1 re2,
+  [] =~ Cat re1 re2 <-> [] =~ re1 /\ [] =~ re2.
+Proof.
+  split; intros.
+  - split; invert H; apply app_eq_nil in H0 as []; now subst.
+  - invert H. rewrite <- (app_nil_r _). now apply MCat. Qed.
+
 Lemma Alt_comm : forall re1 re2,
   equiv (Alt re1 re2) (Alt re2 re1).
 Proof.
@@ -470,7 +477,16 @@ Proof.
       * now apply IHre2, MNil.
 Qed.
 
-Theorem matches_nil_sound : forall re,
+Lemma is_nil_matches_nil : forall re,
+  is_nil re = true -> matches_nil re = true.
+Proof.
+  induction re; cbn; intros; try discriminate; try reflexivity;
+  apply andb_true_iff in H as [H1 H2];
+  try (apply andb_true_iff; split); try (apply orb_true_iff; left);
+  try apply IHre2, H2; apply IHre1, H1.
+Qed.
+
+Theorem matches_nil_true : forall re,
   matches_nil re = true <-> [] =~ re.
 Proof.
   split.
@@ -495,11 +511,33 @@ Proof.
     + split. now apply IHre1. now apply IHre2.
 Qed.
 
+Theorem matches_nil_false : forall re,
+  matches_nil re = false <-> ~ ([] =~ re).
+Proof.
+  unfold not. split.
+  - induction re; cbn; intros; try discriminate;
+    invert H0; try (apply app_eq_nil in H1 as []; subst);
+    try apply andb_false_iff in H as [];
+    try apply orb_false_iff in H as [];
+    try (now apply IHre1); try (now apply IHre2).
+  - induction re; cbn; intros; try reflexivity.
+    + exfalso. apply H. apply MNil.
+    + exfalso. apply H. apply MStar0.
+    + apply andb_false_iff.
+      induction re1; try (now left).
+      * right. apply IHre2. intros. apply H, Cat_nil.
+        split. apply MNil. assumption.
+      * right. apply IHre2. intros. apply H, Cat_nil.
+        split. apply MStar0. assumption.
+      * left. apply IHre1. intros. apply H. apply Cat_nil.
+        split. assumption.
+Admitted.
+
 Theorem matches_nil_Alt : forall re,
   matches_nil re = true -> equiv (Alt Nil re) re.
 Proof.
   split; intros.
-  - invert H0. invert H3. now apply matches_nil_sound. assumption.
+  - invert H0. invert H3. now apply matches_nil_true. assumption.
   - now apply MAltR. Qed.
 
 Fixpoint split_first (re : regexp) : option (list ascii * regexp) :=
@@ -544,26 +582,49 @@ Fixpoint split_last (re : regexp) : option (list ascii * regexp) :=
   | And re1 re2 => (* TODO *) None
   end.
 
+Lemma split_first_not_nil : forall re cs re',
+  split_first re = Some (cs, re') ->
+  matches_nil re = false.
+Proof.
+  induction re; cbn; intros; try discriminate; try reflexivity.
+  - apply andb_false_iff. destruct (is_nil re1).
+    + right. eapply IHre2, H.
+    + destruct (split_first re1).
+      * destruct p. left. now eapply IHre1.
+      * discriminate.
+  - apply orb_false_iff. destruct (split_first re1).
+    + destruct p. destruct (split_first re2) eqn:Hs2.
+      * destruct p. split. now eapply IHre1. now eapply IHre2.
+      * discriminate.
+    + discriminate.
+Qed.
+
 Lemma cat_split_first : forall re cs re',
   split_first re = Some (cs, re') ->
   equiv re (Cat (Class cs) re').
 Proof.
-  split;
-  generalize dependent s; generalize dependent re'; generalize dependent cs.
-  - induction re; cbn; intros; try discriminate.
-    + invert H. apply Cat_Nil_r, Class1. assumption.
-    + admit.
-    + destruct (is_nil re1) eqn:Hempty.
-      * apply IHre2. assumption.
-        invert H0.
-        apply (match_nil _ Hempty) in H4. invert H4.
-        assumption.
+  split; intros.
+  - dependent induction H0; cbn in *; try discriminate.
+    + invert H. apply Cat_Nil_r, Class1, MLit.
+    + invert H. now apply Cat_Nil_r, MClass.
+    + destruct (is_nil re1) eqn:Hnil.
+      * destruct s1.
+        -- now apply IHregexp_match2.
+        -- apply (match_nil _ Hnil) in H0_. invert H0_.
       * destruct (split_first re1) eqn:Hsplit1; try discriminate. destruct p.
-        invert H. admit.
+        invert H. destruct s1.
+        -- apply split_first_not_nil, matches_nil_false in Hsplit1.
+           destruct (Hsplit1 H0_).
+        -- replace ((a :: s1) ++ s2) with ([a] ++ s1 ++ s2) by reflexivity.
+           apply MCat. apply MClass. admit. admit.
     + destruct (split_first re1) eqn:Hsplit1; try discriminate. destruct p.
       destruct (split_first re2) eqn:Hsplit2; try discriminate. destruct p.
-      invert H. invert H0.
-      * apply IHre1. Admitted.
+      invert H. admit.
+    + destruct (split_first re1) eqn:Hsplit1; try discriminate. destruct p.
+      destruct (split_first re2) eqn:Hsplit2; try discriminate. destruct p.
+      invert H. apply IHregexp_match. admit.
+  - admit.
+Admitted.
 
 Reserved Notation "re -->n re'" (at level 40).
 Reserved Notation "re -->*n re'" (at level 40).
