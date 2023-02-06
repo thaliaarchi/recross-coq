@@ -320,7 +320,7 @@ Theorem Cat_Alt_distr_l : forall re1 re2 re3,
 Proof.
   split; intros.
   - invert H; invert H4; [apply MAltL | apply MAltR]; now apply MCat.
-  - invert H; invert H2; [apply MCat, MAltL | apply MCat, MAltR]; assumption.
+  - invert H; invert H2; [now apply MCat, MAltL | now apply MCat, MAltR].
 Qed.
 
 Theorem Cat_Alt_distr_r : forall re1 re2 re3,
@@ -334,7 +334,7 @@ Qed.
 Theorem Alt_comm : forall re1 re2,
   equiv (Alt re1 re2) (Alt re2 re1).
 Proof.
-  split; intros; (invert H; [apply MAltR | apply MAltL]); assumption. Qed.
+  split; intros; (invert H; [now apply MAltR | now apply MAltL]). Qed.
 
 Theorem Alt_assoc : forall re1 re2 re3,
   equiv (Alt re1 (Alt re2 re3)) (Alt (Alt re1 re2) re3).
@@ -365,6 +365,28 @@ Proof.
   - invert H; apply in_app_iff in H2 as [];
     [apply MAltL | apply MAltR]; now apply MClass.
 Qed.
+
+Theorem And_comm : forall re1 re2,
+  equiv (And re1 re2) (And re2 re1).
+Proof.
+  split; intros; invert H; now apply MAnd. Qed.
+
+Theorem And_assoc : forall re1 re2 re3,
+  equiv (And re1 (And re2 re3)) (And (And re1 re2) re3).
+Proof.
+  split; intros.
+  - invert H. invert H4. repeat apply MAnd; assumption.
+  - invert H. invert H3. repeat apply MAnd; assumption. Qed.
+
+Theorem And_EmptySet_l : forall re,
+  equiv (And EmptySet re) EmptySet.
+Proof.
+  split; intros. now invert H. now apply MAnd. Qed.
+
+Theorem And_EmptySet_r : forall re,
+  equiv (And re EmptySet) EmptySet.
+Proof.
+  split; intros. now invert H. now apply MAnd. Qed.
 
 Fixpoint is_empty_set (re : regexp) : bool :=
   match re with
