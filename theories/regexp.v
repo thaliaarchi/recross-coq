@@ -71,12 +71,12 @@ Inductive regexp_match : list ascii -> regexp -> Prop :=
 
   where "s =~ re" := (regexp_match s re).
 
-Theorem MStar1 : forall re s,
+Lemma MStar1 : forall re s,
   s =~ re -> s =~ Star re.
 Proof.
   intros. rewrite <- (app_nil_r _). now apply MStarCat, MStar0. Qed.
 
-Theorem MAlt : forall re1 re2 s,
+Lemma MAlt : forall re1 re2 s,
   s =~ Alt re1 re2 <-> s =~ re1 \/ s =~ re2.
 Proof.
   split; intros.
@@ -86,30 +86,30 @@ Proof.
 Definition equiv (re re' : regexp) := forall s,
   s =~ re <-> s =~ re'.
 
-Theorem equiv_refl : forall re,
+Lemma equiv_refl : forall re,
   equiv re re.
 Proof. now split. Qed.
 
-Theorem equiv_trans : forall re1 re2 re3,
+Lemma equiv_trans : forall re1 re2 re3,
   equiv re1 re2 -> equiv re2 re3 -> equiv re1 re3.
 Proof.
   split; intros.
   - apply H0. now apply H.
   - apply H. now apply H0. Qed.
 
-Theorem equiv_assoc : forall re1 re2,
+Lemma equiv_assoc : forall re1 re2,
   equiv re1 re2 <-> equiv re2 re1.
 Proof.
   split; split; intros; now apply H. Qed.
 
-Theorem Class_subst : forall cs cs',
+Lemma Class_subst : forall cs cs',
   (forall c, In c cs <-> In c cs') ->
   equiv (Class cs) (Class cs').
 Proof.
   split; intros;
   invert H0; apply H in H3; now apply MClass. Qed.
 
-Theorem Star_subst : forall re re',
+Lemma Star_subst : forall re re',
   equiv re re' ->
   equiv (Star re) (Star re').
 Proof.
@@ -122,7 +122,7 @@ Proof.
     + apply MStarCat. now apply H. now apply IHregexp_match2 with re'.
 Qed.
 
-Theorem Cat_subst : forall re1 re1' re2 re2',
+Lemma Cat_subst : forall re1 re1' re2 re2',
   equiv re1 re1' ->
   equiv re2 re2' ->
   equiv (Cat re1 re2) (Cat re1' re2').
@@ -130,7 +130,7 @@ Proof.
   split; intros;
   invert H1; (apply MCat; [now apply H | now apply H0]). Qed.
 
-Theorem Alt_subst : forall re1 re1' re2 re2',
+Lemma Alt_subst : forall re1 re1' re2 re2',
   equiv re1 re1' ->
   equiv re2 re2' ->
   equiv (Alt re1 re2) (Alt re1' re2').
@@ -138,7 +138,7 @@ Proof.
   split; intros;
   (invert H1; [now apply MAltL, H | now apply MAltR, H0]). Qed.
 
-Theorem And_subst : forall re1 re1' re2 re2',
+Lemma And_subst : forall re1 re1' re2 re2',
   equiv re1 re1' ->
   equiv re2 re2' ->
   equiv (And re1 re2) (And re1' re2').
@@ -173,29 +173,29 @@ Definition Alt_subst_r := op2_subst_r Alt Alt_subst.
 Definition And_subst_l := op2_subst_l And And_subst.
 Definition And_subst_r := op2_subst_r And And_subst.
 
-Theorem Void_not : forall s,
+Lemma Void_not : forall s,
   ~ (s =~ Void).
 Proof.
   unfold not. intros. inversion H. Qed.
 
-Theorem Nil_nil : forall s,
+Lemma Nil_nil : forall s,
   s =~ Nil <-> s = [].
 Proof.
   split; intros. now invert H. subst. apply MNil. Qed.
 
-Theorem Class0 :
+Lemma Class0 :
   equiv (Class []) Void.
 Proof.
   split; intros; now invert H. Qed.
 
-Theorem Class1 : forall c,
+Lemma Class1 : forall c,
   equiv (Class [c]) (Lit c).
 Proof.
   split; intros; invert H.
   - invert H2. apply MLit. invert H.
   - apply MClass, in_eq. Qed.
 
-Theorem Class1_Alt : forall c cs,
+Lemma Class1_Alt : forall c cs,
   equiv (Class (c :: cs)) (Alt (Lit c) (Class cs)).
 Proof.
   split; intros; invert H; invert H2.
@@ -204,7 +204,7 @@ Proof.
   - apply MClass, in_eq.
   - now apply MClass, in_cons. Qed.
 
-Theorem ClassN : forall cs,
+Lemma ClassN : forall cs,
   equiv (Class cs) (fold_right (fun c => Alt (Lit c)) Void cs).
 Proof.
   split; intros;
@@ -217,14 +217,14 @@ Proof.
     + now apply Class1_Alt, MAltR, IHcs.
 Qed.
 
-Theorem Star_Void :
+Lemma Star_Void :
   equiv (Star Void) Nil.
 Proof.
   split; intros.
   - invert H. apply MNil. invert H1.
   - invert H. apply MStar0. Qed.
 
-Theorem Star_Nil :
+Lemma Star_Nil :
   equiv (Star Nil) Nil.
 Proof.
   split; intros.
@@ -234,7 +234,7 @@ Proof.
   - invert H. apply MStar0.
 Qed.
 
-Theorem Star_Cat : forall re s1 s2,
+Lemma Star_Cat : forall re s1 s2,
   s1 =~ Star re ->
   s2 =~ Star re ->
   s1 ++ s2 =~ Star re.
@@ -246,7 +246,7 @@ Proof.
     now apply IHregexp_match2.
 Qed.
 
-Theorem Star_idemp : forall re,
+Lemma Star_idemp : forall re,
   equiv (Star (Star re)) (Star re).
 Proof.
   split; intros.
@@ -258,7 +258,7 @@ Proof.
     + apply MStarCat. now apply MStar1. now apply IHregexp_match2.
 Qed.
 
-Theorem Star_Alt_Nil_l : forall re,
+Lemma Star_Alt_Nil_l : forall re,
   equiv (Star (Alt Nil re)) (Star re).
 Proof.
   split; intros;
@@ -271,7 +271,7 @@ Proof.
     + now apply IHregexp_match2.
 Qed.
 
-Theorem Star_Alt_Nil_r : forall re,
+Lemma Star_Alt_Nil_r : forall re,
   equiv (Star (Alt re Nil)) (Star re).
 Proof.
   split; intros;
@@ -284,38 +284,38 @@ Proof.
     + now apply IHregexp_match2.
 Qed.
 
-Theorem Cat_Void_l : forall re,
+Lemma Cat_Void_l : forall re,
   equiv (Cat Void re) Void.
 Proof.
   split; intros; invert H. invert H3. Qed.
 
-Theorem Cat_Void_r : forall re,
+Lemma Cat_Void_r : forall re,
   equiv (Cat re Void) Void.
 Proof.
   split; intros; invert H. invert H4. Qed.
 
-Theorem Cat_Nil_l : forall re,
+Lemma Cat_Nil_l : forall re,
   equiv (Cat Nil re) re.
 Proof.
   split; intros.
   - invert H. now invert H3.
   - rewrite <- (app_nil_l _). apply MCat. apply MNil. assumption. Qed.
 
-Theorem Cat_Nil_r : forall re,
+Lemma Cat_Nil_r : forall re,
   equiv (Cat re Nil) re.
 Proof.
   split; intros.
   - invert H. invert H4. now rewrite app_nil_r.
   - rewrite <- (app_nil_r _). now apply MCat, MNil. Qed.
 
-Theorem Cat_Star : forall re,
+Lemma Cat_Star : forall re,
   equiv (Cat (Star re) (Star re)) (Star re).
 Proof.
   split; intros.
   - invert H. now apply Star_Cat.
   - rewrite <- (app_nil_r _). now apply MCat, MStar0. Qed.
 
-Theorem Cat_Alt_distr_l : forall re1 re2 re3,
+Lemma Cat_Alt_distr_l : forall re1 re2 re3,
   equiv (Cat re1 (Alt re2 re3)) (Alt (Cat re1 re2) (Cat re1 re3)).
 Proof.
   split; intros.
@@ -323,7 +323,7 @@ Proof.
   - invert H; invert H2; [now apply MCat, MAltL | now apply MCat, MAltR].
 Qed.
 
-Theorem Cat_Alt_distr_r : forall re1 re2 re3,
+Lemma Cat_Alt_distr_r : forall re1 re2 re3,
   equiv (Cat (Alt re1 re2) re3) (Alt (Cat re1 re3) (Cat re2 re3)).
 Proof.
   split; intros.
@@ -331,12 +331,12 @@ Proof.
   - invert H; invert H2; apply MCat; try assumption; [now apply MAltL | now apply MAltR].
 Qed.
 
-Theorem Alt_comm : forall re1 re2,
+Lemma Alt_comm : forall re1 re2,
   equiv (Alt re1 re2) (Alt re2 re1).
 Proof.
   split; intros; (invert H; [now apply MAltR | now apply MAltL]). Qed.
 
-Theorem Alt_assoc : forall re1 re2 re3,
+Lemma Alt_assoc : forall re1 re2 re3,
   equiv (Alt re1 (Alt re2 re3)) (Alt (Alt re1 re2) re3).
 Proof.
   split; intros.
@@ -346,17 +346,17 @@ Proof.
     now apply MAltR, MAltL. now apply MAltR, MAltR.
 Qed.
 
-Theorem Alt_Void_l : forall re,
+Lemma Alt_Void_l : forall re,
   equiv (Alt Void re) re.
 Proof.
   split; intros. now invert H. now apply MAltR. Qed.
 
-Theorem Alt_Void_r : forall re,
+Lemma Alt_Void_r : forall re,
   equiv (Alt re Void) re.
 Proof.
   split; intros. now invert H. now apply MAltL. Qed.
 
-Theorem Alt_Class : forall cs1 cs2,
+Lemma Alt_Class : forall cs1 cs2,
   equiv (Alt (Class cs1) (Class cs2)) (Class (cs1 ++ cs2)).
 Proof.
   split; intros.
@@ -366,24 +366,24 @@ Proof.
     [apply MAltL | apply MAltR]; now apply MClass.
 Qed.
 
-Theorem And_comm : forall re1 re2,
+Lemma And_comm : forall re1 re2,
   equiv (And re1 re2) (And re2 re1).
 Proof.
   split; intros; invert H; now apply MAnd. Qed.
 
-Theorem And_assoc : forall re1 re2 re3,
+Lemma And_assoc : forall re1 re2 re3,
   equiv (And re1 (And re2 re3)) (And (And re1 re2) re3).
 Proof.
   split; intros.
   - invert H. invert H4. repeat apply MAnd; assumption.
   - invert H. invert H3. repeat apply MAnd; assumption. Qed.
 
-Theorem And_Void_l : forall re,
+Lemma And_Void_l : forall re,
   equiv (And Void re) Void.
 Proof.
   split; intros. now invert H. now apply MAnd. Qed.
 
-Theorem And_Void_r : forall re,
+Lemma And_Void_r : forall re,
   equiv (And re Void) Void.
 Proof.
   split; intros. now invert H. now apply MAnd. Qed.
@@ -472,7 +472,7 @@ Proof.
       * now apply IHre2, MNil.
 Qed.
 
-Theorem Cat_void_l : forall re1 re2,
+Lemma Cat_void_l : forall re1 re2,
   is_nil re1 = true ->
   equiv (Cat re1 re2) re2.
 Proof.
@@ -484,7 +484,7 @@ Proof.
     + assumption.
 Qed.
 
-Theorem Cat_void_r : forall re1 re2,
+Lemma Cat_void_r : forall re1 re2,
   is_nil re2 = true ->
   equiv (Cat re1 re2) re1.
 Proof.
@@ -667,16 +667,16 @@ Definition And_norm (re1 re2 : regexp) (Hnorm1 : is_normalized re1 = true)
   | _, _ => And re1 re2
   end.
 
-Theorem Class_norm_is_normalized : forall cs,
+Lemma Class_norm_is_normalized : forall cs,
   is_normalized (Class_norm cs) = true.
 Proof. now destruct cs. Qed.
 
-Theorem Star_norm_is_normalized : forall re
+Lemma Star_norm_is_normalized : forall re
   (Hnorm : is_normalized re = true),
   is_normalized (Star_norm re Hnorm) = true.
 Proof. now destruct re. Qed.
 
-Theorem Cat_norm_is_normalized : forall re1 re2
+Lemma Cat_norm_is_normalized : forall re1 re2
   (Hnorm1 : is_normalized re1 = true)
   (Hnorm2 : is_normalized re2 = true),
   is_normalized (Cat_norm re1 re2 Hnorm1 Hnorm2) = true.
@@ -685,7 +685,7 @@ Proof.
   try destruct cs; try (cbn in *; rewrite Hnorm1); intuition.
 Qed.
 
-Theorem Alt_norm_is_normalized : forall re1 re2
+Lemma Alt_norm_is_normalized : forall re1 re2
   (Hnorm1 : is_normalized re1 = true)
   (Hnorm2 : is_normalized re2 = true),
   is_normalized (Alt_norm re1 re2 Hnorm1 Hnorm2) = true.
@@ -694,7 +694,7 @@ Proof.
   try destruct cs; try (cbn in *; rewrite Hnorm1); intuition.
 Qed.
 
-Theorem And_norm_is_normalized : forall re1 re2
+Lemma And_norm_is_normalized : forall re1 re2
   (Hnorm1 : is_normalized re1 = true)
   (Hnorm2 : is_normalized re2 = true),
   is_normalized (And_norm re1 re2 Hnorm1 Hnorm2) = true.
