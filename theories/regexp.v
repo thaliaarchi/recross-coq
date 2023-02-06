@@ -6,11 +6,13 @@ Require Import Setoid.
 
 Local Ltac invert H := inversion H; subst; clear H.
 
+Definition char_set := list ascii.
+
 Inductive regexp :=
   | Void
   | Nil
   | Lit (c : ascii)
-  | Class (cs : list ascii)
+  | Class (cs : char_set)
   | Star (re : regexp)
   | Cat (re1 re2 : regexp)
   | Alt (re1 re2 : regexp)
@@ -72,23 +74,10 @@ Inductive regexp_match : list ascii -> regexp -> Prop :=
 
   where "s =~ re" := (regexp_match s re).
 
-Lemma MStar1 : forall re s,
-  s =~ re -> s =~ Star re.
-Proof.
-  intros. rewrite <- (app_nil_r _). now apply MStarCat, MStar0. Qed.
-
-Lemma MAlt : forall re1 re2 s,
-  s =~ Alt re1 re2 <-> s =~ re1 \/ s =~ re2.
-Proof.
-  split; intros.
-  - invert H; [left | right]; assumption.
-  - destruct H; [apply MAltL | apply MAltR]; assumption. Qed.
-
 Definition equiv (re re' : regexp) := forall s,
   s =~ re <-> s =~ re'.
 
-Lemma equiv_refl : forall re,
-  equiv re re.
+Lemma equiv_refl : forall re, equiv re re.
 Proof. now split. Qed.
 
 Lemma equiv_sym : forall re1 re2,
@@ -103,49 +92,23 @@ Proof.
   - apply H0. now apply H.
   - apply H. now apply H0. Qed.
 
-Lemma Class_compat : forall cs cs',
-  (forall c, In c cs <-> In c cs') ->
-  equiv (Class cs) (Class cs').
-Proof.
-  split; intros;
-  invert H0; apply H in H3; now apply MClass. Qed.
+Definition cs_equiv (cs1 cs2 : char_set) := forall c,
+  In c cs1 <-> In c cs2.
 
-Lemma Star_compat : forall re re',
-  equiv re re' ->
-  equiv (Star re) (Star re').
+Lemma cs_equiv_refl : forall cs, cs_equiv cs cs.
+Proof. now split. Qed.
+
+Lemma cs_equiv_sym : forall cs1 cs2,
+  cs_equiv cs1 cs2 -> cs_equiv cs2 cs1.
+Proof.
+  split; intros; now apply H. Qed.
+
+Lemma cs_equiv_trans : forall cs1 cs2 cs3,
+  cs_equiv cs1 cs2 -> cs_equiv cs2 cs3 -> cs_equiv cs1 cs3.
 Proof.
   split; intros.
-  - dependent induction H0.
-    + apply MStar0.
-    + apply MStarCat. now apply H. now apply IHregexp_match2 with re.
-  - dependent induction H0.
-    + apply MStar0.
-    + apply MStarCat. now apply H. now apply IHregexp_match2 with re'.
-Qed.
-
-Lemma Cat_compat :
-  forall re1 re1', equiv re1 re1' ->
-  forall re2 re2', equiv re2 re2' ->
-  equiv (Cat re1 re2) (Cat re1' re2').
-Proof.
-  split; intros;
-  invert H1; (apply MCat; [now apply H | now apply H0]). Qed.
-
-Lemma Alt_compat :
-  forall re1 re1', equiv re1 re1' ->
-  forall re2 re2', equiv re2 re2' ->
-  equiv (Alt re1 re2) (Alt re1' re2').
-Proof.
-  split; intros;
-  (invert H1; [now apply MAltL, H | now apply MAltR, H0]). Qed.
-
-Lemma And_compat :
-  forall re1 re1', equiv re1 re1' ->
-  forall re2 re2', equiv re2 re2' ->
-  equiv (And re1 re2) (And re1' re2').
-Proof.
-  split; intros;
-  invert H1; (apply MAnd; [now apply H | now apply H0]). Qed.
+  - apply H0. now apply H.
+  - apply H. now apply H0. Qed.
 
 Add Relation regexp equiv
   reflexivity proved by equiv_refl
@@ -153,21 +116,47 @@ Add Relation regexp equiv
   transitivity proved by equiv_trans
   as equiv_rel.
 
+Add Relation char_set cs_equiv
+  reflexivity proved by cs_equiv_refl
+  symmetry proved by cs_equiv_sym
+  transitivity proved by cs_equiv_trans
+  as cs_equiv_rel.
+
+Add Morphism Class
+  with signature cs_equiv ==> equiv as Class_compat.
+Proof.
+  split; intros;
+  invert H0; apply H in H3; now apply MClass. Qed.
+
 Add Morphism Star
-  with signature equiv ==> equiv as Star_mor.
-Proof. exact Star_compat. Qed.
+  with signature equiv ==> equiv as Star_compat.
+Proof.
+  split; intros.
+  - dependent induction H0.
+    + apply MStar0.
+    + apply MStarCat. now apply H. now apply IHregexp_match2 with x.
+  - dependent induction H0.
+    + apply MStar0.
+    + apply MStarCat. now apply H. now apply IHregexp_match2 with y.
+Qed.
 
 Add Morphism Cat
-  with signature equiv ==> equiv ==> equiv as Cat_mor.
-Proof. exact Cat_compat. Qed.
+  with signature equiv ==> equiv ==> equiv as Cat_compat.
+Proof.
+  split; intros;
+  invert H1; (apply MCat; [now apply H | now apply H0]). Qed.
 
 Add Morphism Alt
-  with signature equiv ==> equiv ==> equiv as Alt_mor.
-Proof. exact Alt_compat. Qed.
+  with signature equiv ==> equiv ==> equiv as Alt_compat.
+Proof.
+  split; intros;
+  (invert H1; [now apply MAltL, H | now apply MAltR, H0]). Qed.
 
 Add Morphism And
-  with signature equiv ==> equiv ==> equiv as And_mor.
-Proof. exact And_compat. Qed.
+  with signature equiv ==> equiv ==> equiv as And_compat.
+Proof.
+  split; intros;
+  invert H1; (apply MAnd; [now apply H | now apply H0]). Qed.
 
 Lemma Void_not : forall s,
   ~ (s =~ Void).
@@ -213,6 +202,11 @@ Proof.
     + now apply Class1_Alt, MAltR, IHcs.
 Qed.
 
+Lemma Star1 : forall re s,
+  s =~ re -> s =~ Star re.
+Proof.
+  intros. rewrite <- (app_nil_r _). now apply MStarCat, MStar0. Qed.
+
 Lemma Star_Void :
   equiv (Star Void) Nil.
 Proof.
@@ -251,7 +245,7 @@ Proof.
     + apply Star_Cat. assumption. now apply IHregexp_match2.
   - dependent induction H.
     + apply MStar0.
-    + apply MStarCat. now apply MStar1. now apply IHregexp_match2.
+    + apply MStarCat. now apply Star1. now apply IHregexp_match2.
 Qed.
 
 Lemma Star_Alt_Nil_l : forall re,
@@ -334,6 +328,13 @@ Proof.
   - split; invert H; apply app_eq_nil in H0 as []; now subst.
   - invert H. rewrite <- (app_nil_r _). now apply MCat. Qed.
 
+Lemma Alt_or : forall re1 re2 s,
+  s =~ Alt re1 re2 <-> s =~ re1 \/ s =~ re2.
+Proof.
+  split; intros.
+  - invert H; [left | right]; assumption.
+  - destruct H; [apply MAltL | apply MAltR]; assumption. Qed.
+
 Lemma Alt_comm : forall re1 re2,
   equiv (Alt re1 re2) (Alt re2 re1).
 Proof.
@@ -357,7 +358,7 @@ Proof.
 Lemma Alt_Void_r : forall re,
   equiv (Alt re Void) re.
 Proof.
-  split; intros. now invert H. now apply MAltL. Qed.
+  intros. now rewrite Alt_comm, Alt_Void_l. Qed.
 
 Lemma Alt_Class : forall cs1 cs2,
   equiv (Alt (Class cs1) (Class cs2)) (Class (cs1 ++ cs2)).
@@ -389,7 +390,7 @@ Proof.
 Lemma And_Void_r : forall re,
   equiv (And re Void) Void.
 Proof.
-  split; intros. now invert H. now apply MAnd. Qed.
+  intros. now rewrite And_comm, And_Void_l. Qed.
 
 Fixpoint is_void (re : regexp) : bool :=
   match re with
