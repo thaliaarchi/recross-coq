@@ -2,6 +2,7 @@ Require Import Bool.
 Require Import Ascii String. Open Scope string_scope.
 Require Import List. Import ListNotations.
 Require Import Program.Equality.
+Require Import Setoid.
 
 Local Ltac invert H := inversion H; subst; clear H.
 
@@ -90,6 +91,11 @@ Lemma equiv_refl : forall re,
   equiv re re.
 Proof. now split. Qed.
 
+Lemma equiv_sym : forall re1 re2,
+  equiv re1 re2 -> equiv re2 re1.
+Proof.
+  split; intros; now apply H. Qed.
+
 Lemma equiv_trans : forall re1 re2 re3,
   equiv re1 re2 -> equiv re2 re3 -> equiv re1 re3.
 Proof.
@@ -97,19 +103,14 @@ Proof.
   - apply H0. now apply H.
   - apply H. now apply H0. Qed.
 
-Lemma equiv_assoc : forall re1 re2,
-  equiv re1 re2 <-> equiv re2 re1.
-Proof.
-  split; split; intros; now apply H. Qed.
-
-Lemma Class_subst : forall cs cs',
+Lemma Class_compat : forall cs cs',
   (forall c, In c cs <-> In c cs') ->
   equiv (Class cs) (Class cs').
 Proof.
   split; intros;
   invert H0; apply H in H3; now apply MClass. Qed.
 
-Lemma Star_subst : forall re re',
+Lemma Star_compat : forall re re',
   equiv re re' ->
   equiv (Star re) (Star re').
 Proof.
@@ -122,56 +123,51 @@ Proof.
     + apply MStarCat. now apply H. now apply IHregexp_match2 with re'.
 Qed.
 
-Lemma Cat_subst : forall re1 re1' re2 re2',
-  equiv re1 re1' ->
-  equiv re2 re2' ->
+Lemma Cat_compat :
+  forall re1 re1', equiv re1 re1' ->
+  forall re2 re2', equiv re2 re2' ->
   equiv (Cat re1 re2) (Cat re1' re2').
 Proof.
   split; intros;
   invert H1; (apply MCat; [now apply H | now apply H0]). Qed.
 
-Lemma Alt_subst : forall re1 re1' re2 re2',
-  equiv re1 re1' ->
-  equiv re2 re2' ->
+Lemma Alt_compat :
+  forall re1 re1', equiv re1 re1' ->
+  forall re2 re2', equiv re2 re2' ->
   equiv (Alt re1 re2) (Alt re1' re2').
 Proof.
   split; intros;
   (invert H1; [now apply MAltL, H | now apply MAltR, H0]). Qed.
 
-Lemma And_subst : forall re1 re1' re2 re2',
-  equiv re1 re1' ->
-  equiv re2 re2' ->
+Lemma And_compat :
+  forall re1 re1', equiv re1 re1' ->
+  forall re2 re2', equiv re2 re2' ->
   equiv (And re1 re2) (And re1' re2').
 Proof.
   split; intros;
   invert H1; (apply MAnd; [now apply H | now apply H0]). Qed.
 
-Lemma op2_subst_l Op
-  (Op_subst : forall re1 re1' re2 re2', equiv re1 re1' -> equiv re2 re2' ->
-                equiv (Op re1 re2) (Op re1' re2')) :
-  forall re1 re1' re2,
-    equiv re1 re1' ->
-    equiv (Op re1 re2) (Op re1' re2).
-Proof.
-  split; intros;
-  now apply (Op_subst _ _ _ _ H (equiv_refl _)) in H0. Qed.
+Add Relation regexp equiv
+  reflexivity proved by equiv_refl
+  symmetry proved by equiv_sym
+  transitivity proved by equiv_trans
+  as equiv_rel.
 
-Lemma op2_subst_r Op
-  (Op_subst : forall re1 re1' re2 re2', equiv re1 re1' -> equiv re2 re2' ->
-                equiv (Op re1 re2) (Op re1' re2')) :
-  forall re1 re2 re2',
-    equiv re2 re2' ->
-    equiv (Op re1 re2) (Op re1 re2').
-Proof.
-  split; intros;
-  now apply (Op_subst _ _ _ _ (equiv_refl _) H) in H0. Qed.
+Add Morphism Star
+  with signature equiv ==> equiv as Star_mor.
+Proof. exact Star_compat. Qed.
 
-Definition Cat_subst_l := op2_subst_l Cat Cat_subst.
-Definition Cat_subst_r := op2_subst_r Cat Cat_subst.
-Definition Alt_subst_l := op2_subst_l Alt Alt_subst.
-Definition Alt_subst_r := op2_subst_r Alt Alt_subst.
-Definition And_subst_l := op2_subst_l And And_subst.
-Definition And_subst_r := op2_subst_r And And_subst.
+Add Morphism Cat
+  with signature equiv ==> equiv ==> equiv as Cat_mor.
+Proof. exact Cat_compat. Qed.
+
+Add Morphism Alt
+  with signature equiv ==> equiv ==> equiv as Alt_mor.
+Proof. exact Alt_compat. Qed.
+
+Add Morphism And
+  with signature equiv ==> equiv ==> equiv as And_mor.
+Proof. exact And_compat. Qed.
 
 Lemma Void_not : forall s,
   ~ (s =~ Void).
@@ -265,7 +261,7 @@ Proof.
   dependent induction H; try apply MStar0.
   - invert H.
     + invert H3. now apply IHregexp_match2.
-    + apply MStarCat. assumption. apply IHregexp_match2. reflexivity.
+    + apply MStarCat. assumption. now apply IHregexp_match2.
   - apply MStarCat.
     + now apply MAltR.
     + now apply IHregexp_match2.
