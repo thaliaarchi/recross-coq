@@ -11,7 +11,7 @@ Definition char_set := list ascii.
 Inductive regexp :=
   | Void
   | Nil
-  | Lit (c : ascii)
+  | Char (c : ascii)
   | Class (cs : char_set)
   | Star (re : regexp)
   | Cat (re1 re2 : regexp)
@@ -33,12 +33,12 @@ Notation "re1 & re2" := (And re1 re2) (in custom regexp at level 45, left associ
 
 Fixpoint regexp_of_string (s : string) : regexp :=
   match s with
-  | String c "" => Lit c
-  | String c s' => Cat (Lit c) (regexp_of_string s')
+  | String c "" => Char c
+  | String c s' => Cat (Char c) (regexp_of_string s')
   | "" => Nil
   end.
 
-Coercion Lit : ascii >-> regexp.
+Coercion Char : ascii >-> regexp.
 Coercion regexp_of_string : string >-> regexp.
 
 Reserved Notation "s =~ re" (at level 80).
@@ -46,8 +46,8 @@ Reserved Notation "s =~ re" (at level 80).
 Inductive regexp_match : list ascii -> regexp -> Prop :=
   | MNil :
       [] =~ Nil
-  | MLit c :
-      [c] =~ Lit c
+  | MChar c :
+      [c] =~ Char c
   | MClass c cs :
       In c cs ->
       [c] =~ Class cs
@@ -174,28 +174,28 @@ Proof.
   split; intros; now invert H. Qed.
 
 Lemma Class1 : forall c,
-  equiv (Class [c]) (Lit c).
+  equiv (Class [c]) (Char c).
 Proof.
   split; intros; invert H.
-  - invert H2. apply MLit. invert H.
+  - invert H2. apply MChar. invert H.
   - apply MClass, in_eq. Qed.
 
 Lemma Class1_Alt : forall c cs,
-  equiv (Class (c :: cs)) (Alt (Lit c) (Class cs)).
+  equiv (Class (c :: cs)) (Alt (Char c) (Class cs)).
 Proof.
   split; intros; invert H; invert H2.
-  - apply MAltL, MLit.
+  - apply MAltL, MChar.
   - now apply MAltR, MClass.
   - apply MClass, in_eq.
   - now apply MClass, in_cons. Qed.
 
 Lemma ClassN : forall cs,
-  equiv (Class cs) (fold_right (fun c => Alt (Lit c)) Void cs).
+  equiv (Class cs) (fold_right (fun c => Alt (Char c)) Void cs).
 Proof.
   split; intros;
   induction cs; cbn; try now invert H.
   - invert H. invert H2.
-    + apply MAltL, MLit.
+    + apply MAltL, MChar.
     + now apply MAltR, IHcs, MClass.
   - invert H.
     + now apply Class1_Alt, MAltL.
@@ -395,7 +395,7 @@ Proof.
 Fixpoint is_void (re : regexp) : bool :=
   match re with
   | Void | Class [] => true
-  | Nil | Lit _ | Class _ | Star _ => false
+  | Nil | Char _ | Class _ | Star _ => false
   | Cat re1 re2 => is_void re1 || is_void re2
   | Alt re1 re2 => is_void re1 && is_void re2
   | And re1 re2 => is_void re1 || is_void re2
@@ -404,7 +404,7 @@ Fixpoint is_void (re : regexp) : bool :=
 Fixpoint is_nil (re : regexp) : bool :=
   match re with
   | Nil => true
-  | Void | Lit _ | Class _ => false
+  | Void | Char _ | Class _ => false
   | Star re => is_void re
   | Cat re1 re2 => is_nil re1 && is_nil re2
   | Alt re1 re2 => is_nil re1 && is_nil re2
@@ -413,7 +413,7 @@ Fixpoint is_nil (re : regexp) : bool :=
 
 Fixpoint matches_nil (re : regexp) : bool :=
   match re with
-  | Void | Lit _ | Class _ => false
+  | Void | Char _ | Class _ => false
   | Nil | Star _ => true
   | Cat re1 re2 => matches_nil re1 && matches_nil re2
   | Alt re1 re2 => matches_nil re1 || matches_nil re2
