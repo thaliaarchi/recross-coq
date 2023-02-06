@@ -146,6 +146,33 @@ Proof.
   split; intros;
   invert H1; (apply MAnd; [now apply H | now apply H0]). Qed.
 
+Lemma op2_subst_l Op
+  (Op_subst : forall re1 re1' re2 re2', equiv re1 re1' -> equiv re2 re2' ->
+                equiv (Op re1 re2) (Op re1' re2')) :
+  forall re1 re1' re2,
+    equiv re1 re1' ->
+    equiv (Op re1 re2) (Op re1' re2).
+Proof.
+  split; intros;
+  now apply (Op_subst _ _ _ _ H (equiv_refl _)) in H0. Qed.
+
+Lemma op2_subst_r Op
+  (Op_subst : forall re1 re1' re2 re2', equiv re1 re1' -> equiv re2 re2' ->
+                equiv (Op re1 re2) (Op re1' re2')) :
+  forall re1 re2 re2',
+    equiv re2 re2' ->
+    equiv (Op re1 re2) (Op re1 re2').
+Proof.
+  split; intros;
+  now apply (Op_subst _ _ _ _ (equiv_refl _) H) in H0. Qed.
+
+Definition Cat_subst_l := op2_subst_l Cat Cat_subst.
+Definition Cat_subst_r := op2_subst_r Cat Cat_subst.
+Definition Alt_subst_l := op2_subst_l Alt Alt_subst.
+Definition Alt_subst_r := op2_subst_r Alt Alt_subst.
+Definition And_subst_l := op2_subst_l And And_subst.
+Definition And_subst_r := op2_subst_r And And_subst.
+
 Theorem EmptySet_not : forall s,
   ~ (s =~ EmptySet).
 Proof.
