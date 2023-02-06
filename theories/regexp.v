@@ -417,8 +417,7 @@ Fixpoint matches_nil (re : regexp) : bool :=
   end.
 
 Theorem match_void : forall re,
-  is_void re = true ->
-  equiv re Void.
+  is_void re = true -> equiv re Void.
 Proof.
   split; generalize dependent s.
   - induction re; cbn in *; intros; try intuition.
@@ -441,8 +440,7 @@ Proof.
 Qed.
 
 Theorem match_nil : forall re,
-  is_nil re = true ->
-  equiv re Nil.
+  is_nil re = true -> equiv re Nil.
 Proof.
   split; generalize dependent s.
   - induction re; cbn in *; intros; try intuition.
@@ -472,30 +470,37 @@ Proof.
       * now apply IHre2, MNil.
 Qed.
 
-Lemma Cat_void_l : forall re1 re2,
-  is_nil re1 = true ->
-  equiv (Cat re1 re2) re2.
+Theorem matches_nil_sound : forall re,
+  matches_nil re = true <-> [] =~ re.
 Proof.
-  split; intros.
-  - invert H0. apply (match_nil _ H) in H4. now invert H4.
-  - apply (match_nil _) in H.
-    rewrite <- (app_nil_l _). apply MCat.
-    + apply H, MNil.
-    + assumption.
+  split.
+  - induction re; cbn; intros; try discriminate.
+    + apply MNil.
+    + apply MStar0.
+    + apply andb_true_iff in H as [H1 H2].
+      rewrite <- (app_nil_r _). apply MCat.
+      apply IHre1, H1. apply IHre2, H2.
+    + apply orb_true_iff in H as [].
+      apply MAltL, IHre1, H. apply MAltR, IHre2, H.
+    + apply andb_true_iff in H as [H1 H2].
+      apply MAnd.
+      apply IHre1, H1. apply IHre2, H2.
+  - induction re; cbn; intros; try reflexivity;
+    try apply andb_true_iff; try apply orb_true_iff;
+    invert H.
+    + apply app_eq_nil in H0 as []. subst.
+      split. now apply IHre1. now apply IHre2.
+    + left. now apply IHre1.
+    + right. now apply IHre2.
+    + split. now apply IHre1. now apply IHre2.
 Qed.
 
-Lemma Cat_void_r : forall re1 re2,
-  is_nil re2 = true ->
-  equiv (Cat re1 re2) re1.
+Theorem matches_nil_Alt : forall re,
+  matches_nil re = true -> equiv (Alt Nil re) re.
 Proof.
   split; intros.
-  - invert H0. apply (match_nil _ H) in H5. invert H5.
-    now rewrite app_nil_r.
-  - apply (match_nil _) in H.
-    rewrite <- (app_nil_r _). apply MCat.
-    + assumption.
-    + apply H, MNil.
-Qed.
+  - invert H0. invert H3. now apply matches_nil_sound. assumption.
+  - now apply MAltR. Qed.
 
 Fixpoint split_first (re : regexp) : option (list ascii * regexp) :=
   match re with
