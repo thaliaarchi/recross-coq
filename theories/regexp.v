@@ -74,19 +74,21 @@ Inductive regexp_match : list ascii -> regexp -> Prop :=
 
   where "s =~ re" := (regexp_match s re).
 
-Definition equiv (re re' : regexp) := forall s,
+Definition re_equiv (re re' : regexp) := forall s,
   s =~ re <-> s =~ re'.
 
-Lemma equiv_refl : forall re, equiv re re.
+Infix "<=>" := re_equiv (at level 90, right associativity).
+
+Lemma re_equiv_refl : forall re, re <=> re.
 Proof. now split. Qed.
 
-Lemma equiv_sym : forall re1 re2,
-  equiv re1 re2 -> equiv re2 re1.
+Lemma re_equiv_sym : forall re1 re2,
+  re1 <=> re2 -> re2 <=> re1.
 Proof.
   split; intros; now apply H. Qed.
 
-Lemma equiv_trans : forall re1 re2 re3,
-  equiv re1 re2 -> equiv re2 re3 -> equiv re1 re3.
+Lemma re_equiv_trans : forall re1 re2 re3,
+  re1 <=> re2 -> re2 <=> re3 -> re1 <=> re3.
 Proof.
   split; intros.
   - apply H0. now apply H.
@@ -110,11 +112,11 @@ Proof.
   - apply H0. now apply H.
   - apply H. now apply H0. Qed.
 
-Add Relation regexp equiv
-  reflexivity proved by equiv_refl
-  symmetry proved by equiv_sym
-  transitivity proved by equiv_trans
-  as equiv_rel.
+Add Relation regexp re_equiv
+  reflexivity proved by re_equiv_refl
+  symmetry proved by re_equiv_sym
+  transitivity proved by re_equiv_trans
+  as re_equiv_rel.
 
 Add Relation char_set cs_equiv
   reflexivity proved by cs_equiv_refl
@@ -123,13 +125,13 @@ Add Relation char_set cs_equiv
   as cs_equiv_rel.
 
 Add Morphism Class
-  with signature cs_equiv ==> equiv as Class_compat.
+  with signature cs_equiv ==> re_equiv as Class_compat.
 Proof.
   split; intros;
   invert H0; apply H in H3; now apply MClass. Qed.
 
 Add Morphism Star
-  with signature equiv ==> equiv as Star_compat.
+  with signature re_equiv ==> re_equiv as Star_compat.
 Proof.
   split; intros.
   - dependent induction H0.
@@ -141,19 +143,19 @@ Proof.
 Qed.
 
 Add Morphism Cat
-  with signature equiv ==> equiv ==> equiv as Cat_compat.
+  with signature re_equiv ==> re_equiv ==> re_equiv as Cat_compat.
 Proof.
   split; intros;
   invert H1; (apply MCat; [now apply H | now apply H0]). Qed.
 
 Add Morphism Alt
-  with signature equiv ==> equiv ==> equiv as Alt_compat.
+  with signature re_equiv ==> re_equiv ==> re_equiv as Alt_compat.
 Proof.
   split; intros;
   (invert H1; [now apply MAltL, H | now apply MAltR, H0]). Qed.
 
 Add Morphism And
-  with signature equiv ==> equiv ==> equiv as And_compat.
+  with signature re_equiv ==> re_equiv ==> re_equiv as And_compat.
 Proof.
   split; intros;
   invert H1; (apply MAnd; [now apply H | now apply H0]). Qed.
@@ -168,20 +170,19 @@ Lemma Nil_nil : forall s,
 Proof.
   split; intros. now invert H. subst. apply MNil. Qed.
 
-Lemma Class0 :
-  equiv (Class []) Void.
+Lemma Class0 : Class [] <=> Void.
 Proof.
   split; intros; now invert H. Qed.
 
 Lemma Class1 : forall c,
-  equiv (Class [c]) (Char c).
+  Class [c] <=> Char c.
 Proof.
   split; intros; invert H.
   - invert H2. apply MChar. invert H.
   - apply MClass, in_eq. Qed.
 
 Lemma Class1_Alt : forall c cs,
-  equiv (Class (c :: cs)) (Alt (Char c) (Class cs)).
+  Class (c :: cs) <=> Alt (Char c) (Class cs).
 Proof.
   split; intros; invert H; invert H2.
   - apply MAltL, MChar.
@@ -190,7 +191,7 @@ Proof.
   - now apply MClass, in_cons. Qed.
 
 Lemma ClassN : forall cs,
-  equiv (Class cs) (fold_right (fun c => Alt (Char c)) Void cs).
+  Class cs <=> fold_right (fun c => Alt (Char c)) Void cs.
 Proof.
   split; intros;
   induction cs; cbn; try now invert H.
@@ -207,15 +208,13 @@ Lemma Star1 : forall re s,
 Proof.
   intros. rewrite <- (app_nil_r _). now apply MStarCat, MStar0. Qed.
 
-Lemma Star_Void :
-  equiv (Star Void) Nil.
+Lemma Star_Void : Star Void <=> Nil.
 Proof.
   split; intros.
   - invert H. apply MNil. invert H1.
   - invert H. apply MStar0. Qed.
 
-Lemma Star_Nil :
-  equiv (Star Nil) Nil.
+Lemma Star_Nil : Star Nil <=> Nil.
 Proof.
   split; intros.
   - dependent induction H.
@@ -237,7 +236,7 @@ Proof.
 Qed.
 
 Lemma Star_idemp : forall re,
-  equiv (Star (Star re)) (Star re).
+  Star (Star re) <=> Star re.
 Proof.
   split; intros.
   - dependent induction H.
@@ -249,7 +248,7 @@ Proof.
 Qed.
 
 Lemma Star_Alt_Nil_l : forall re,
-  equiv (Star (Alt Nil re)) (Star re).
+  Star (Alt Nil re) <=> Star re.
 Proof.
   split; intros;
   dependent induction H; try apply MStar0.
@@ -262,7 +261,7 @@ Proof.
 Qed.
 
 Lemma Star_Alt_Nil_r : forall re,
-  equiv (Star (Alt re Nil)) (Star re).
+  Star (Alt re Nil) <=> Star re.
 Proof.
   split; intros;
   dependent induction H; try apply MStar0.
@@ -275,38 +274,38 @@ Proof.
 Qed.
 
 Lemma Cat_Void_l : forall re,
-  equiv (Cat Void re) Void.
+  Cat Void re <=> Void.
 Proof.
   split; intros; invert H. invert H3. Qed.
 
 Lemma Cat_Void_r : forall re,
-  equiv (Cat re Void) Void.
+  Cat re Void <=> Void.
 Proof.
   split; intros; invert H. invert H4. Qed.
 
 Lemma Cat_Nil_l : forall re,
-  equiv (Cat Nil re) re.
+  Cat Nil re <=> re.
 Proof.
   split; intros.
   - invert H. now invert H3.
   - rewrite <- (app_nil_l _). apply MCat. apply MNil. assumption. Qed.
 
 Lemma Cat_Nil_r : forall re,
-  equiv (Cat re Nil) re.
+  Cat re Nil <=> re.
 Proof.
   split; intros.
   - invert H. invert H4. now rewrite app_nil_r.
   - rewrite <- (app_nil_r _). now apply MCat, MNil. Qed.
 
 Lemma Cat_Star : forall re,
-  equiv (Cat (Star re) (Star re)) (Star re).
+  Cat (Star re) (Star re) <=> Star re.
 Proof.
   split; intros.
   - invert H. now apply Star_Cat.
   - rewrite <- (app_nil_r _). now apply MCat, MStar0. Qed.
 
 Lemma Cat_Alt_distr_l : forall re1 re2 re3,
-  equiv (Cat re1 (Alt re2 re3)) (Alt (Cat re1 re2) (Cat re1 re3)).
+  Cat re1 (Alt re2 re3) <=> Alt (Cat re1 re2) (Cat re1 re3).
 Proof.
   split; intros.
   - invert H; invert H4; [apply MAltL | apply MAltR]; now apply MCat.
@@ -314,7 +313,7 @@ Proof.
 Qed.
 
 Lemma Cat_Alt_distr_r : forall re1 re2 re3,
-  equiv (Cat (Alt re1 re2) re3) (Alt (Cat re1 re3) (Cat re2 re3)).
+  Cat (Alt re1 re2) re3 <=> Alt (Cat re1 re3) (Cat re2 re3).
 Proof.
   split; intros.
   - invert H; invert H3; [apply MAltL | apply MAltR]; now apply MCat.
@@ -336,12 +335,12 @@ Proof.
   - destruct H; [apply MAltL | apply MAltR]; assumption. Qed.
 
 Lemma Alt_comm : forall re1 re2,
-  equiv (Alt re1 re2) (Alt re2 re1).
+  Alt re1 re2 <=> Alt re2 re1.
 Proof.
   split; intros; (invert H; [now apply MAltR | now apply MAltL]). Qed.
 
 Lemma Alt_assoc : forall re1 re2 re3,
-  equiv (Alt re1 (Alt re2 re3)) (Alt (Alt re1 re2) re3).
+  Alt re1 (Alt re2 re3) <=> Alt (Alt re1 re2) re3.
 Proof.
   split; intros.
   - invert H. now apply MAltL, MAltL.
@@ -351,17 +350,17 @@ Proof.
 Qed.
 
 Lemma Alt_Void_l : forall re,
-  equiv (Alt Void re) re.
+  Alt Void re <=> re.
 Proof.
   split; intros. now invert H. now apply MAltR. Qed.
 
 Lemma Alt_Void_r : forall re,
-  equiv (Alt re Void) re.
+  Alt re Void <=> re.
 Proof.
   intros. now rewrite Alt_comm, Alt_Void_l. Qed.
 
 Lemma Alt_Class : forall cs1 cs2,
-  equiv (Alt (Class cs1) (Class cs2)) (Class (cs1 ++ cs2)).
+  Alt (Class cs1) (Class cs2) <=> Class (cs1 ++ cs2).
 Proof.
   split; intros.
   - invert H; invert H2;
@@ -371,24 +370,24 @@ Proof.
 Qed.
 
 Lemma And_comm : forall re1 re2,
-  equiv (And re1 re2) (And re2 re1).
+  And re1 re2 <=> And re2 re1.
 Proof.
   split; intros; invert H; now apply MAnd. Qed.
 
 Lemma And_assoc : forall re1 re2 re3,
-  equiv (And re1 (And re2 re3)) (And (And re1 re2) re3).
+  And re1 (And re2 re3) <=> And (And re1 re2) re3.
 Proof.
   split; intros.
   - invert H. invert H4. repeat apply MAnd; assumption.
   - invert H. invert H3. repeat apply MAnd; assumption. Qed.
 
 Lemma And_Void_l : forall re,
-  equiv (And Void re) Void.
+  And Void re <=> Void.
 Proof.
   split; intros. now invert H. now apply MAnd. Qed.
 
 Lemma And_Void_r : forall re,
-  equiv (And re Void) Void.
+  And re Void <=> Void.
 Proof.
   intros. now rewrite And_comm, And_Void_l. Qed.
 
@@ -421,7 +420,7 @@ Fixpoint matches_nil (re : regexp) : bool :=
   end.
 
 Theorem match_void : forall re,
-  is_void re = true -> equiv re Void.
+  is_void re = true -> re <=> Void.
 Proof.
   split; generalize dependent s.
   - induction re; cbn in *; intros; try intuition.
@@ -444,7 +443,7 @@ Proof.
 Qed.
 
 Theorem match_nil : forall re,
-  is_nil re = true -> equiv re Nil.
+  is_nil re = true -> re <=> Nil.
 Proof.
   split; generalize dependent s.
   - induction re; cbn in *; intros; try intuition.
@@ -531,7 +530,7 @@ Proof.
 Admitted.
 
 Theorem matches_nil_Alt : forall re,
-  matches_nil re = true -> equiv (Alt Nil re) re.
+  matches_nil re = true -> Alt Nil re <=> re.
 Proof.
   split; intros.
   - invert H0. invert H3. now apply matches_nil_true. assumption.
