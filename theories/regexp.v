@@ -6,8 +6,8 @@ Require Import Program.Equality.
 Local Ltac invert H := inversion H; subst; clear H.
 
 Inductive regexp :=
-  | EmptySet
-  | EmptyStr
+  | Void
+  | Nil
   | Lit (c : ascii)
   | Class (cs : list ascii)
   | Star (re : regexp)
@@ -20,8 +20,8 @@ Declare Scope regexp_scope.
 Notation "// re //" := re (at level 0, re custom regexp at level 99) : regexp_scope.
 Notation "( re )" := re (in custom regexp, re at level 99) : regexp_scope.
 Notation "x" := x (in custom regexp at level 0, x constr at level 0) : regexp_scope.
-Notation "'∅'" := EmptySet (in custom regexp) : regexp_scope.
-Notation "'ε'" := EmptyStr (in custom regexp) : regexp_scope.
+Notation "'∅'" := Void (in custom regexp) : regexp_scope.
+Notation "'ε'" := Nil (in custom regexp) : regexp_scope.
 Notation "[ c1 , c2 , .. , cn ]" := (Class (cons c1 (cons c2 .. (cons cn nil) ..))) (in custom regexp) : regexp_scope.
 Notation "re *" := (Star re) (in custom regexp at level 35, left associativity, format "re *") : regexp_scope.
 Notation "re1 ; re2" := (Cat re1 re2) (in custom regexp at level 40, left associativity) : regexp_scope.
@@ -32,7 +32,7 @@ Fixpoint regexp_of_string (s : string) : regexp :=
   match s with
   | String c "" => Lit c
   | String c s' => Cat (Lit c) (regexp_of_string s')
-  | "" => EmptyStr
+  | "" => Nil
   end.
 
 Coercion Lit : ascii >-> regexp.
@@ -41,8 +41,8 @@ Coercion regexp_of_string : string >-> regexp.
 Reserved Notation "s =~ re" (at level 80).
 
 Inductive regexp_match : list ascii -> regexp -> Prop :=
-  | MEmptyStr :
-      [] =~ EmptyStr
+  | MNil :
+      [] =~ Nil
   | MLit c :
       [c] =~ Lit c
   | MClass c cs :
@@ -173,18 +173,18 @@ Definition Alt_subst_r := op2_subst_r Alt Alt_subst.
 Definition And_subst_l := op2_subst_l And And_subst.
 Definition And_subst_r := op2_subst_r And And_subst.
 
-Theorem EmptySet_not : forall s,
-  ~ (s =~ EmptySet).
+Theorem Void_not : forall s,
+  ~ (s =~ Void).
 Proof.
   unfold not. intros. inversion H. Qed.
 
-Theorem EmptyStr_nil : forall s,
-  s =~ EmptyStr <-> s = [].
+Theorem Nil_nil : forall s,
+  s =~ Nil <-> s = [].
 Proof.
-  split; intros. now invert H. subst. apply MEmptyStr. Qed.
+  split; intros. now invert H. subst. apply MNil. Qed.
 
 Theorem Class0 :
-  equiv (Class []) EmptySet.
+  equiv (Class []) Void.
 Proof.
   split; intros; now invert H. Qed.
 
@@ -205,7 +205,7 @@ Proof.
   - now apply MClass, in_cons. Qed.
 
 Theorem ClassN : forall cs,
-  equiv (Class cs) (fold_right (fun c => Alt (Lit c)) EmptySet cs).
+  equiv (Class cs) (fold_right (fun c => Alt (Lit c)) Void cs).
 Proof.
   split; intros;
   induction cs; cbn; try now invert H.
@@ -217,19 +217,19 @@ Proof.
     + now apply Class1_Alt, MAltR, IHcs.
 Qed.
 
-Theorem Star_EmptySet :
-  equiv (Star EmptySet) EmptyStr.
+Theorem Star_Void :
+  equiv (Star Void) Nil.
 Proof.
   split; intros.
-  - invert H. apply MEmptyStr. invert H1.
+  - invert H. apply MNil. invert H1.
   - invert H. apply MStar0. Qed.
 
-Theorem Star_EmptyStr :
-  equiv (Star EmptyStr) EmptyStr.
+Theorem Star_Nil :
+  equiv (Star Nil) Nil.
 Proof.
   split; intros.
   - dependent induction H.
-    + apply MEmptyStr.
+    + apply MNil.
     + invert H. now apply IHregexp_match2.
   - invert H. apply MStar0.
 Qed.
@@ -258,8 +258,8 @@ Proof.
     + apply MStarCat. now apply MStar1. now apply IHregexp_match2.
 Qed.
 
-Theorem Star_Alt_EmptyStr_l : forall re,
-  equiv (Star (Alt EmptyStr re)) (Star re).
+Theorem Star_Alt_Nil_l : forall re,
+  equiv (Star (Alt Nil re)) (Star re).
 Proof.
   split; intros;
   dependent induction H; try apply MStar0.
@@ -271,8 +271,8 @@ Proof.
     + now apply IHregexp_match2.
 Qed.
 
-Theorem Star_Alt_EmptyStr_r : forall re,
-  equiv (Star (Alt re EmptyStr)) (Star re).
+Theorem Star_Alt_Nil_r : forall re,
+  equiv (Star (Alt re Nil)) (Star re).
 Proof.
   split; intros;
   dependent induction H; try apply MStar0.
@@ -284,29 +284,29 @@ Proof.
     + now apply IHregexp_match2.
 Qed.
 
-Theorem Cat_EmptySet_l : forall re,
-  equiv (Cat EmptySet re) EmptySet.
+Theorem Cat_Void_l : forall re,
+  equiv (Cat Void re) Void.
 Proof.
   split; intros; invert H. invert H3. Qed.
 
-Theorem Cat_EmptySet_r : forall re,
-  equiv (Cat re EmptySet) EmptySet.
+Theorem Cat_Void_r : forall re,
+  equiv (Cat re Void) Void.
 Proof.
   split; intros; invert H. invert H4. Qed.
 
-Theorem Cat_EmptyStr_l : forall re,
-  equiv (Cat EmptyStr re) re.
+Theorem Cat_Nil_l : forall re,
+  equiv (Cat Nil re) re.
 Proof.
   split; intros.
   - invert H. now invert H3.
-  - rewrite <- (app_nil_l _). apply MCat. apply MEmptyStr. assumption. Qed.
+  - rewrite <- (app_nil_l _). apply MCat. apply MNil. assumption. Qed.
 
-Theorem Cat_EmptyStr_r : forall re,
-  equiv (Cat re EmptyStr) re.
+Theorem Cat_Nil_r : forall re,
+  equiv (Cat re Nil) re.
 Proof.
   split; intros.
   - invert H. invert H4. now rewrite app_nil_r.
-  - rewrite <- (app_nil_r _). now apply MCat, MEmptyStr. Qed.
+  - rewrite <- (app_nil_r _). now apply MCat, MNil. Qed.
 
 Theorem Cat_Star : forall re,
   equiv (Cat (Star re) (Star re)) (Star re).
@@ -346,13 +346,13 @@ Proof.
     now apply MAltR, MAltL. now apply MAltR, MAltR.
 Qed.
 
-Theorem Alt_EmptySet_l : forall re,
-  equiv (Alt EmptySet re) re.
+Theorem Alt_Void_l : forall re,
+  equiv (Alt Void re) re.
 Proof.
   split; intros. now invert H. now apply MAltR. Qed.
 
-Theorem Alt_EmptySet_r : forall re,
-  equiv (Alt re EmptySet) re.
+Theorem Alt_Void_r : forall re,
+  equiv (Alt re Void) re.
 Proof.
   split; intros. now invert H. now apply MAltL. Qed.
 
@@ -378,47 +378,47 @@ Proof.
   - invert H. invert H4. repeat apply MAnd; assumption.
   - invert H. invert H3. repeat apply MAnd; assumption. Qed.
 
-Theorem And_EmptySet_l : forall re,
-  equiv (And EmptySet re) EmptySet.
+Theorem And_Void_l : forall re,
+  equiv (And Void re) Void.
 Proof.
   split; intros. now invert H. now apply MAnd. Qed.
 
-Theorem And_EmptySet_r : forall re,
-  equiv (And re EmptySet) EmptySet.
+Theorem And_Void_r : forall re,
+  equiv (And re Void) Void.
 Proof.
   split; intros. now invert H. now apply MAnd. Qed.
 
-Fixpoint is_empty_set (re : regexp) : bool :=
+Fixpoint is_void (re : regexp) : bool :=
   match re with
-  | EmptySet | Class [] => true
-  | EmptyStr | Lit _ | Class _ | Star _ => false
-  | Cat re1 re2 => is_empty_set re1 || is_empty_set re2
-  | Alt re1 re2 => is_empty_set re1 && is_empty_set re2
-  | And re1 re2 => is_empty_set re1 || is_empty_set re2
+  | Void | Class [] => true
+  | Nil | Lit _ | Class _ | Star _ => false
+  | Cat re1 re2 => is_void re1 || is_void re2
+  | Alt re1 re2 => is_void re1 && is_void re2
+  | And re1 re2 => is_void re1 || is_void re2
   end.
 
-Fixpoint is_empty_str (re : regexp) : bool :=
+Fixpoint is_nil (re : regexp) : bool :=
   match re with
-  | EmptyStr => true
-  | EmptySet | Lit _ | Class _ => false
-  | Star re => is_empty_set re
-  | Cat re1 re2 => is_empty_str re1 && is_empty_str re2
-  | Alt re1 re2 => is_empty_str re1 && is_empty_str re2
-  | And re1 re2 => is_empty_str re1 && is_empty_str re2
+  | Nil => true
+  | Void | Lit _ | Class _ => false
+  | Star re => is_void re
+  | Cat re1 re2 => is_nil re1 && is_nil re2
+  | Alt re1 re2 => is_nil re1 && is_nil re2
+  | And re1 re2 => is_nil re1 && is_nil re2
   end.
 
-Fixpoint matches_empty_str (re : regexp) : bool :=
+Fixpoint matches_nil (re : regexp) : bool :=
   match re with
-  | EmptySet | Lit _ | Class _ => false
-  | EmptyStr | Star _ => true
-  | Cat re1 re2 => matches_empty_str re1 && matches_empty_str re2
-  | Alt re1 re2 => matches_empty_str re1 || matches_empty_str re2
-  | And re1 re2 => matches_empty_str re1 && matches_empty_str re2
+  | Void | Lit _ | Class _ => false
+  | Nil | Star _ => true
+  | Cat re1 re2 => matches_nil re1 && matches_nil re2
+  | Alt re1 re2 => matches_nil re1 || matches_nil re2
+  | And re1 re2 => matches_nil re1 && matches_nil re2
   end.
 
-Theorem match_empty_set : forall re,
-  is_empty_set re = true ->
-  equiv re EmptySet.
+Theorem match_void : forall re,
+  is_void re = true ->
+  equiv re Void.
 Proof.
   split; generalize dependent s.
   - induction re; cbn in *; intros; try intuition.
@@ -440,19 +440,19 @@ Proof.
   - intros. invert H0.
 Qed.
 
-Theorem match_empty_str : forall re,
-  is_empty_str re = true ->
-  equiv re EmptyStr.
+Theorem match_nil : forall re,
+  is_nil re = true ->
+  equiv re Nil.
 Proof.
   split; generalize dependent s.
   - induction re; cbn in *; intros; try intuition.
     + invert H0.
-      * apply MEmptyStr.
-      * apply (match_empty_set _ H) in H2. invert H2.
+      * apply MNil.
+      * apply (match_void _ H) in H2. invert H2.
     + invert H0.
       apply andb_true_iff in H as [H1 H2].
       apply (IHre1 H1 _) in H4. invert H4.
-      apply (IHre2 H2 _) in H5. invert H5. apply MEmptyStr.
+      apply (IHre2 H2 _) in H5. invert H5. apply MNil.
     + apply andb_true_iff in H as [H1 H2].
       invert H0; [now apply (IHre1 H1 ) | now apply (IHre2 H2)].
     + invert H0.
@@ -463,49 +463,49 @@ Proof.
     + apply MStar0.
     + apply andb_true_iff in H as [H1 H2].
       rewrite <- (app_nil_r _).
-      apply MCat; [apply (IHre1 H1) | apply (IHre2 H2)]; apply MEmptyStr.
+      apply MCat; [apply (IHre1 H1) | apply (IHre2 H2)]; apply MNil.
     + apply andb_true_iff in H as [H1 H2].
-      apply MAltL, (IHre1 H1 _), MEmptyStr.
+      apply MAltL, (IHre1 H1 _), MNil.
     + apply andb_true_iff in H as [H1 H2].
       apply MAnd.
-      * now apply IHre1, MEmptyStr.
-      * now apply IHre2, MEmptyStr.
+      * now apply IHre1, MNil.
+      * now apply IHre2, MNil.
 Qed.
 
-Theorem Cat_empty_set_l : forall re1 re2,
-  is_empty_str re1 = true ->
+Theorem Cat_void_l : forall re1 re2,
+  is_nil re1 = true ->
   equiv (Cat re1 re2) re2.
 Proof.
   split; intros.
-  - invert H0. apply (match_empty_str _ H) in H4. now invert H4.
-  - apply (match_empty_str _) in H.
+  - invert H0. apply (match_nil _ H) in H4. now invert H4.
+  - apply (match_nil _) in H.
     rewrite <- (app_nil_l _). apply MCat.
-    + apply H, MEmptyStr.
+    + apply H, MNil.
     + assumption.
 Qed.
 
-Theorem Cat_empty_set_r : forall re1 re2,
-  is_empty_str re2 = true ->
+Theorem Cat_void_r : forall re1 re2,
+  is_nil re2 = true ->
   equiv (Cat re1 re2) re1.
 Proof.
   split; intros.
-  - invert H0. apply (match_empty_str _ H) in H5. invert H5.
+  - invert H0. apply (match_nil _ H) in H5. invert H5.
     now rewrite app_nil_r.
-  - apply (match_empty_str _) in H.
+  - apply (match_nil _) in H.
     rewrite <- (app_nil_r _). apply MCat.
     + assumption.
-    + apply H, MEmptyStr.
+    + apply H, MNil.
 Qed.
 
 Fixpoint split_first (re : regexp) : option (list ascii * regexp) :=
   match re with
-  | EmptySet => None
-  | EmptyStr => None
-  | Lit c => Some ([c], EmptyStr)
-  | Class cs => Some (cs, EmptyStr)
+  | Void => None
+  | Nil => None
+  | Lit c => Some ([c], Nil)
+  | Class cs => Some (cs, Nil)
   | Star re => None
   | Cat re1 re2 =>
-      if is_empty_str re1 then split_first re2 else
+      if is_nil re1 then split_first re2 else
       match split_first re1 with
       | Some (cs, re1') => Some (cs, Cat re1' re2)
       | _ => None
@@ -520,13 +520,13 @@ Fixpoint split_first (re : regexp) : option (list ascii * regexp) :=
 
 Fixpoint split_last (re : regexp) : option (list ascii * regexp) :=
   match re with
-  | EmptySet => None
-  | EmptyStr => None
-  | Lit c => Some ([c], EmptyStr)
-  | Class cs => Some (cs, EmptyStr)
+  | Void => None
+  | Nil => None
+  | Lit c => Some ([c], Nil)
+  | Class cs => Some (cs, Nil)
   | Star re => None
   | Cat re1 re2 =>
-      if is_empty_str re2 then split_last re1 else
+      if is_nil re2 then split_last re1 else
       match split_last re2 with
       | Some (cs, re2') => Some (cs, Cat re1 re2')
       | _ => None
@@ -546,12 +546,12 @@ Proof.
   split;
   generalize dependent s; generalize dependent re'; generalize dependent cs.
   - induction re; cbn; intros; try discriminate.
-    + invert H. apply Cat_EmptyStr_r, Class1. assumption.
+    + invert H. apply Cat_Nil_r, Class1. assumption.
     + admit.
-    + destruct (is_empty_str re1) eqn:Hempty.
+    + destruct (is_nil re1) eqn:Hempty.
       * apply IHre2. assumption.
         invert H0.
-        apply (match_empty_str _ Hempty) in H4. invert H4.
+        apply (match_nil _ Hempty) in H4. invert H4.
         assumption.
       * destruct (split_first re1) eqn:Hsplit1; try discriminate. destruct p.
         invert H. admit.
@@ -564,35 +564,35 @@ Reserved Notation "re -->n re'" (at level 40).
 Reserved Notation "re -->*n re'" (at level 40).
 
 Inductive normalize_step : regexp -> regexp -> Prop :=
-  | NEmptySet :                              EmptySet                   -->n EmptySet
+  | NVoid :                                  Void                      -->n Void
 
-  | NEmptyStr :                              EmptyStr                   -->n EmptyStr
+  | NNil :                                   Nil                       -->n Nil
 
-  | NLit c :                                 Lit c                      -->n Lit c
+  | NLit c :                                 Lit c                     -->n Lit c
 
-  | NClass0 :                                Class []                   -->n EmptySet
-  | NClassN cs :                 cs <> [] -> Class cs                   -->n Class cs
+  | NClass0 :                                Class []                  -->n Void
+  | NClassN cs :                 cs <> [] -> Class cs                  -->n Class cs
 
-  | NStarEmptySet :                          Star EmptySet              -->n EmptyStr
-  | NStarEmptyStr :                          Star EmptyStr              -->n EmptyStr
-  | NStarStar re :                           Star (Star re)             -->n Star re
+  | NStarVoid :                              Star Void                 -->n Nil
+  | NStarNil :                               Star Nil                  -->n Nil
+  | NStarStar re :                           Star (Star re)            -->n Star re
 
-  | NCatEmptySetL re :                       Cat EmptySet re            -->n EmptySet
-  | NCatEmptySetR re :                       Cat re EmptySet            -->n EmptySet
-  | NCatEmptyStrL re :                       Cat EmptyStr re            -->n re
-  | NCatEmptyStrR re :                       Cat re EmptyStr            -->n re
-  | NCatStarEquiv re1 re2 : equiv re1 re2 -> Cat (Star re1) (Star re2)  -->n Star re1
+  | NCatVoidL re :                           Cat Void re               -->n Void
+  | NCatVoidR re :                           Cat re Void               -->n Void
+  | NCatNilL re :                            Cat Nil re                -->n re
+  | NCatNilR re :                            Cat re Nil                -->n re
+  | NCatStarEquiv re1 re2 : equiv re1 re2 -> Cat (Star re1) (Star re2) -->n Star re1
 
-  | NAltEquiv re1 re2 :     equiv re1 re2 -> Alt re1 re2                -->n re1
-  | NAltEmptySetL re :                       Alt EmptySet re            -->n re
-  | NAltEmptySetR re :                       Alt re EmptySet            -->n re
-  | NAltEmptyStrR re :                       Alt re EmptyStr            -->n Alt EmptyStr re
-  | NAltEmptyStrStar re :                    Alt EmptyStr (Star re)     -->n Star re
-  | NAltAltEmptyStr re1 re2 :                Alt (Alt EmptyStr re1) re2 -->n Alt EmptyStr (Alt re1 re2)
+  | NAltEquiv re1 re2 :     equiv re1 re2 -> Alt re1 re2               -->n re1
+  | NAltVoidL re :                           Alt Void re               -->n re
+  | NAltVoidR re :                           Alt re Void               -->n re
+  | NAltNilR re :                            Alt re Nil                -->n Alt Nil re
+  | NAltNilStar re :                         Alt Nil (Star re)         -->n Star re
+  | NAltAltNil re1 re2 :                     Alt (Alt Nil re1) re2     -->n Alt Nil (Alt re1 re2)
 
-  | NAndEquiv re1 re2 :     equiv re1 re2 -> And re1 re2                -->n re1
-  | NAndEmptySetL re :                       And EmptySet re            -->n EmptySet
-  | NAndEmptySetR re :                       And re EmptySet            -->n EmptySet
+  | NAndEquiv re1 re2 :     equiv re1 re2 -> And re1 re2               -->n re1
+  | NAndVoidL re :                           And Void re               -->n Void
+  | NAndVoidR re :                           And re Void               -->n Void
 
   where "re -->n re'" := (normalize_step re re').
 
@@ -607,52 +607,52 @@ Inductive normalize : regexp -> regexp -> Prop :=
 
 Fixpoint is_normalized (re : regexp) : bool :=
   match re with
-  | EmptySet | EmptyStr | Lit _ => true
+  | Void | Nil | Lit _ => true
   | Class [] => false
   | Class _ => true
-  | Star (EmptySet | EmptyStr | Star _) => false
-  (* | Star (Alt EmptyStr _ | Alt _ EmptyStr) => false *)
+  | Star (Void | Nil | Star _) => false
+  (* | Star (Alt Nil _ | Alt _ Nil) => false *)
   | Star re => is_normalized re
-  | Cat (EmptySet | EmptyStr) _ | Cat _ (EmptySet | EmptyStr) => false
+  | Cat (Void | Nil) _ | Cat _ (Void | Nil) => false
   | Cat re1 re2 => is_normalized re1 || is_normalized re2
-  | Alt EmptySet _ | Alt _ EmptySet
-  | Alt EmptyStr (EmptyStr | Star _) | Alt (Star _) EmptyStr => false
-  (* | Alt EmptyStr re | Alt re EmptyStr => negb (matches_empty_str re) && is_normalized re *)
+  | Alt Void _ | Alt _ Void
+  | Alt Nil (Nil | Star _) | Alt (Star _) Nil => false
+  (* | Alt Nil re | Alt re Nil => negb (matches_nil re) && is_normalized re *)
   | Alt (Lit _ | Class _) (Lit _ | Class _) => false
   | Alt re1 re2 => is_normalized re1 && is_normalized re2
-  | And EmptySet _ | And _ EmptySet => false
+  | And Void _ | And _ Void => false
   | And re1 re2 => is_normalized re1 && is_normalized re2
   end.
 
 Definition Class_norm (cs : list ascii) : regexp :=
   match cs with
-  | [] => EmptySet
+  | [] => Void
   | _ => Class cs
   end.
 
 Definition Star_norm (re : regexp) (Hnorm : is_normalized re = true) : regexp :=
   match re with
-  | EmptySet | EmptyStr => EmptyStr
+  | Void | Nil => Nil
   | Star re => Star re
-  (* | Alt EmptyStr re | Alt re EmptyStr => Star re *)
+  (* | Alt Nil re | Alt re Nil => Star re *)
   | _ => Star re
   end.
 
 Definition Cat_norm (re1 re2 : regexp) (Hnorm1 : is_normalized re1 = true)
                                        (Hnorm2 : is_normalized re2 = true) : regexp :=
   match re1, re2 with
-  | EmptySet, _ | _, EmptySet => EmptySet
-  | EmptyStr, re | re, EmptyStr => re
+  | Void, _ | _, Void => Void
+  | Nil, re | re, Nil => re
   | _, _ => Cat re1 re2
   end.
 
 Definition Alt_norm (re1 re2 : regexp) (Hnorm1 : is_normalized re1 = true)
                                        (Hnorm2 : is_normalized re2 = true) : regexp :=
   match re1, re2 with
-  | EmptySet, re | re, EmptySet => re
-  | EmptyStr, EmptyStr => EmptyStr
-  | EmptyStr, Star re | Star re, EmptyStr => Star re
-  (* | EmptyStr, re | re, EmptyStr => if matches_empty_str re then re else Alt EmptyStr re *)
+  | Void, re | re, Void => re
+  | Nil, Nil => Nil
+  | Nil, Star re | Star re, Nil => Star re
+  (* | Nil, re | re, Nil => if matches_nil re then re else Alt Nil re *)
   | Lit c1, Lit c2 => Class [c1; c2]
   | Lit c1, Class cs2 => Class (c1 :: cs2)
   | Class cs1, Lit c2 => Class (cs1 ++ [c2])
@@ -663,7 +663,7 @@ Definition Alt_norm (re1 re2 : regexp) (Hnorm1 : is_normalized re1 = true)
 Definition And_norm (re1 re2 : regexp) (Hnorm1 : is_normalized re1 = true)
                                        (Hnorm2 : is_normalized re2 = true) : regexp :=
   match re1, re2 with
-  | EmptySet, _ | _, EmptySet => EmptySet
+  | Void, _ | _, Void => Void
   | _, _ => And re1 re2
   end.
 
