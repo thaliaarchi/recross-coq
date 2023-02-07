@@ -3,3 +3,4 @@ theories/util.v
 theories/utf8.v
 theories/regexp.v
 theories/regexp_equiv.v
+theories/regexp_syntax.v
