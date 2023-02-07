@@ -42,7 +42,7 @@ Inductive token :=
   | TChar (c : ascii)
   | TClass (cs : list ascii)
   | TOp (op : token_op)
-  | TErr.
+  | TErr (bad : string).
 
 Fixpoint lex (s : string) : list token :=
   match s with
@@ -52,7 +52,7 @@ Fixpoint lex (s : string) : list token :=
   | String "(" s' => TOp TParenL :: lex s'
   | String ")" s' => TOp TParenR :: lex s'
   | String "[" s' => lex_class s' []
-  | String "]" s' => TErr :: lex s'
+  | String "]" s' => TErr "]" :: lex s'
   | String c s' => TChar c :: lex s'
   | "" => []
   end
@@ -60,7 +60,7 @@ with lex_class s cs :=
   match s with
   | String "]" s' => TClass (rev cs) :: lex s'
   | String c s' => lex_class s' (c :: cs)
-  | "" => [TErr]
+  | "" => [TErr ""]
   end.
 
 Definition token_op_to_ascii (op : token_op) : ascii :=
@@ -77,7 +77,7 @@ Fixpoint tokens_to_string (ts : list token) : string :=
   | TChar c :: ts' => String c (tokens_to_string ts')
   | TClass cs :: ts' => "[" ++ string_of_list_ascii cs ++ "]" ++ tokens_to_string ts'
   | TOp op :: ts' => String (token_op_to_ascii op) (tokens_to_string ts')
-  | TErr :: ts' => "(?<error>)" ++ tokens_to_string ts'
+  | TErr err :: ts' => err ++ tokens_to_string ts'
   | [] => ""
   end.
 
