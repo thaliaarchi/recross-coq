@@ -1,4 +1,3 @@
-Require Import Ascii String. Open Scope string_scope.
 Require Import Setoid.
 From recross Require Import util.
 

@@ -230,6 +230,38 @@ Proof.
   - invert H. now invert H3.
   - rewrite <- (app_nil_l _). apply MCat. apply MNil. assumption. Qed.
 
+Lemma Cat_Char_l : forall re c s,
+  c :: s =~ Cat (Char c) re <-> s =~ re.
+Proof.
+  split; intros.
+  - invert H. invert H3. now invert H0.
+  - replace (c :: s) with ([c] ++ s) by reflexivity.
+    apply MCat. apply MChar. assumption. Qed.
+
+Lemma Cat_Char_r : forall re c s,
+  s ++ [c] =~ Cat re (Char c) <-> s =~ re.
+Proof.
+  split; intros.
+  - invert H. invert H4. apply app_inv_tail_iff in H0. now subst.
+  - now apply MCat, MChar. Qed.
+
+Lemma Cat_Class_l : forall re c cs s,
+  In c cs ->
+  c :: s =~ Cat (Class cs) re <-> s =~ re.
+Proof.
+  split; intros.
+  - invert H0. invert H4. now invert H1.
+  - replace (c :: s) with ([c] ++ s) by reflexivity.
+    apply MCat. now apply MClass. assumption. Qed.
+
+Lemma Cat_Class_r : forall re c cs s,
+  In c cs ->
+  s ++ [c] =~ Cat re (Class cs) <-> s =~ re.
+Proof.
+  split; intros.
+  - invert H0. invert H5. apply app_inj_tail_iff in H1 as []. now subst.
+  - now apply MCat, MClass. Qed.
+
 Lemma Cat_Nil_r : forall re,
   Cat re Nil <=> re.
 Proof.
@@ -366,3 +398,10 @@ Lemma And_Nil_false_r : forall re,
   matches_nil re = false -> And re Nil <=> Void.
 Proof.
   intros. now rewrite And_comm, And_Nil_false_l. Qed.
+
+Lemma str_matches_regexp_of_str : forall s,
+  list_ascii_of_string s =~ regexp_of_string s.
+Proof.
+  induction s.
+  - apply MNil.
+  - destruct s. apply MChar. now apply Cat_Char_l. Qed.
