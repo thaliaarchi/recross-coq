@@ -89,35 +89,34 @@ Fixpoint regexp_to_string (re : regexp) : string :=
                    paren_and re2 (regexp_to_string re2)
   end.
 
-Inductive token_op :=
+Inductive token :=
+  | TNil
+  | TChar (c : ascii)
+  | TClass (cs : list ascii)
   | TStar
+  | TCat
   | TAlt
   | TAnd
   | TParenL
-  | TParenR.
-
-Inductive token :=
-  | TChar (c : ascii)
-  | TClass (cs : list ascii)
-  | TOp (op : token_op)
+  | TParenR
   | TErr.
 
-Fixpoint lex (s : string) : list token :=
+Fixpoint lex_tokens (s : string) : list token :=
   match s with
-  | "*" ::: s' => TOp TStar :: lex s'
-  | "|" ::: s' => TOp TAlt :: lex s'
-  | "&" ::: s' => TOp TAnd :: lex s'
-  | "(" ::: s' => TOp TParenL :: lex s'
-  | ")" ::: s' => TOp TParenR :: lex s'
+  | "*" ::: s' => TStar :: lex_tokens s'
+  | "|" ::: s' => TAlt :: lex_tokens s'
+  | "&" ::: s' => TAnd :: lex_tokens s'
+  | "(" ::: s' => TParenL :: lex_tokens s'
+  | ")" ::: s' => TParenR :: lex_tokens s'
   | "[" ::: s' => lex_class s' []
   | "]" ::: s' => [TErr]
   | "\" ::: s' => lex_escape s' None
-  | c ::: s' => TChar c :: lex s'
+  | c ::: s' => TChar c :: lex_tokens s'
   | "" => []
   end
 with lex_class s cs :=
   match s with
-  | "]" ::: s' => TClass (rev cs) :: lex s'
+  | "]" ::: s' => TClass (rev cs) :: lex_tokens s'
   | "\" ::: s' => lex_escape s' (Some cs)
   | c ::: s' => lex_class s' (c :: cs)
   | "" => [TErr]
@@ -130,70 +129,145 @@ with lex_escape s maybe_cs :=
       if hex_to_byte c1 c2 is Some c then
         match maybe_cs with
         | Some cs => lex_class s' (c :: cs)
-        | None => TChar c :: lex s'
+        | None => TChar c :: lex_tokens s'
         end
       else [TErr]
   | "x" ::: _ => [TErr]
-  | c ::: s' => TChar c :: lex s'
+  | c ::: s' => TChar c :: lex_tokens s'
   | "" => [TErr]
   end.
 
-Definition token_op_to_ascii (op : token_op) : ascii :=
-  match op with
-  | TStar => "*"
-  | TAlt => "|"
-  | TAnd => "&"
-  | TParenL => "("
-  | TParenR => ")"
+Fixpoint insert_invisible (ts : list token) : list token :=
+  match ts with
+  | t1 :: (t2 :: _) as ts' =>
+      match t1, t2 with
+      | TParenL, (TAlt | TAnd) | (TAlt | TAnd), TParenR =>
+          t1 :: TNil :: insert_invisible ts'
+      | (TChar _ | TClass _ | TStar | TParenR), (TChar _ | TClass _ | TParenL) =>
+          t1 :: TCat :: insert_invisible ts'
+      | _, _ => t1 :: insert_invisible ts'
+      end
+  | t :: ts' => t :: insert_invisible ts'
+  | [] => []
   end.
+
+Definition lex (s : string) : list token :=
+  insert_invisible (lex_tokens s).
 
 Fixpoint tokens_to_string (ts : list token) : string :=
   match ts with
+  | TNil :: ts' => tokens_to_string ts'
   | TChar c :: ts' => String c (tokens_to_string ts')
   | TClass cs :: ts' => "[" ++ string_of_list_ascii cs ++ "]" ++ tokens_to_string ts'
-  | TOp op :: ts' => String (token_op_to_ascii op) (tokens_to_string ts')
+  | TStar :: ts' => String "*" (tokens_to_string ts')
+  | TCat :: ts' => tokens_to_string ts'
+  | TAlt :: ts' => String "|" (tokens_to_string ts')
+  | TAnd :: ts' => String "&" (tokens_to_string ts')
+  | TParenL :: ts' => String "(" (tokens_to_string ts')
+  | TParenR :: ts' => String ")" (tokens_to_string ts')
   | TErr :: ts' => tokens_to_string ts'
   | [] => ""
   end.
 
 Inductive parse_op :=
   | OGroup
-  | OStar
   | OCat
   | OAlt
-  | OAnd.
+  | OAnd
+  | OStar.
 
 Definition op_precedence (op : parse_op) : nat :=
   match op with
   | OGroup => 0
-  | OStar => 1
-  | OCat => 2
-  | OAlt | OAnd => 3
+  | OCat => 1
+  | OAlt | OAnd => 2
+  | OStar => 3
   end.
 
-Definition op_associativity (op : parse_op) : bool :=
+Definition op_left_associative (op : parse_op) : bool :=
   match op with
-  | OGroup => true (* right associative *)
-  | OStar => false (* left *)
-  | OCat | OAlt | OAnd => true
+  | OGroup => false
+  | OStar => true
+  | OCat | OAlt | OAnd => false
   end.
 
 (*
-a(b|c*d)*e&f ==> a;(b|c*;d)*;e&f
-a rs=[Lit "a"]
-; rs=[Lit "a"] ops=[Cat]
-( rs=[Lit "a"] ops=[Cat; Group]
-b rs=[Lit "a"; Lit "b"] ops=[Cat; Group]
-| rs=[Lit "a"; Lit "b"] ops=[Cat; Group; Alt]
-c rs=[Lit "a"; Lit "b"; Lit "c"] ops=[Cat; Group; Alt]
-* rs=[Lit "a"; Lit "b"; Lit "c"] ops=[Cat; Group; Alt; Star]
-; rs=[Lit "a"; Lit "b"; Star (Lit "c")] ops=[Cat; Group; Alt; Cat]
-d rs=[Lit "a"; Lit "b"; Star (Lit "c"); Lit "d"] ops=[Cat; Group; Alt; Cat]
-) rs=[Lit "a"; Alt (Lit "b") (Cat (Star (Lit "c")) (Lit "d"))] ops=[Cat]
-* rs=[Lit "a"; Alt (Lit "b") (Cat (Star (Lit "c")) (Lit "d"))] ops=[Cat; Star]
-; rs=[Lit "a"; Star (Alt (Lit "b") (Cat (Star (Lit "c")) (Lit "d")))] ops=[Cat; Cat]
-e rs=[Lit "a"; Star (Alt (Lit "b") (Cat (Star (Lit "c")) (Lit "d"))); Lit "e"] ops=[Cat; Cat]
-& rs=[Cat (Lit "a") (Cat (Star (Alt (Lit "b") (Cat (Star (Lit "c")) (Lit "d")))) (Lit "e"))] ops=[And]
-f rs=[Cat (Lit "a") (Cat (Star (Alt (Lit "b") (Cat (Star (Lit "c")) (Lit "d")))) (Lit "e")); Lit "f"] ops=[And]
-And (Cat (Lit "a") (Cat (Star (Alt (Lit "b") (Cat (Star (Lit "c")) (Lit "d")))) (Lit "e"))) (Lit "f")
+  Operator precedence (lowest to highest):
+  - OGroup
+  - OCat (right associativity)
+  - OAlt, OAnd (right associativity)
+  - OStar (left associativity)
 *)
+Definition greater_precedence (op1 op2 : parse_op) : bool :=
+  match op1, op2 with
+  | (OAlt | OAnd), OCat => true (* left associative, so greater than *)
+  | OStar, _ => true (* right associative, so greater than or equal *)
+  | _, _ => false
+  end.
+
+Definition apply_op op rs ops : option (list regexp * list parse_op) :=
+  match op, rs with
+  | OGroup, _ => Some (rs, ops)
+  | OCat, re2 :: re1 :: rs' => Some (Cat re1 re2 :: rs', ops)
+  | OAlt, re2 :: re1 :: rs' => Some (Alt re1 re2 :: rs', ops)
+  | OAnd, re2 :: re1 :: rs' => Some (And re1 re2 :: rs', ops)
+  | OStar, re :: rs' => Some (Star re :: rs', ops)
+  | _, _ => None
+  end.
+
+Definition parse_token (t : token) (rs : list regexp) (ops : list parse_op) : option (list regexp * list parse_op) :=
+  let fix close_group rs ops :=
+    match ops, rs with
+    | OGroup :: ops', _ => Some (rs, ops')
+    | OCat :: ops', re2 :: re1 :: rs' => Some (Cat re1 re2 :: rs', ops')
+    | OAlt :: ops', re2 :: re1 :: rs' => Some (Alt re1 re2 :: rs', ops')
+    | OAnd :: ops', re2 :: re1 :: rs' => Some (And re1 re2 :: rs', ops')
+    | OStar :: ops', re :: rs' => Some (Star re :: rs', ops')
+    | _, _ => None
+    end in
+  let fix push_op op rs ops :=
+    match ops with
+    | op2 :: ops' =>
+        if greater_precedence op2 op then apply_op op2 rs ops'
+        else Some (rs, op :: ops)
+    | [] => Some (rs, op :: ops)
+    end in
+  match t with
+  | TNil => Some (Nil :: rs, ops)
+  | TChar c => Some (Char c :: rs, ops)
+  | TClass cs => Some (Class cs :: rs, ops)
+  | TParenL => Some (rs, OGroup :: ops)
+  | TParenR => close_group rs ops
+  | TCat => push_op OCat rs ops
+  | TAlt => push_op OAlt rs ops
+  | TAnd => push_op OAnd rs ops
+  | TStar => push_op OStar rs ops
+  | TErr => None
+  end%char.
+
+Definition parse (ts : list token) : option regexp :=
+  let fix parse_rec ts rs ops :=
+    match ts with
+    | t :: ts' => if parse_token t rs ops is Some (rs', ops')
+                  then parse_rec ts' rs' ops' else None
+    | [] => None (* TODO *)
+    end in
+  parse_rec ts [] [].
+
+Goal lex "a(b|c*d)*e&f" = [TChar "a"; TCat; TParenL; TChar "b"; TAlt; TChar "c"; TStar; TCat; TChar "d"; TParenR; TStar; TCat; TChar "e"; TAnd; TChar "f"].                                                                                               Proof. reflexivity. Qed.
+Goal parse (lex "a(b|c*d)*e&f") = Some (And (Cat (Char "a") (Cat (Star (Alt (Char "b") (Cat (Star (Char "c")) (Char "d")))) (Char "e"))) (Char "f")).                                                                                                     Proof. Fail reflexivity. Admitted.
+Goal parse_token (TChar "a") [] []                                                                                               = Some ([Char "a"], []).                                                                                                 Proof. reflexivity. Qed.
+Goal parse_token TCat [Char "a"] []                                                                                              = Some ([Char "a"], [OCat]).                                                                                             Proof. reflexivity. Qed.
+Goal parse_token TParenL [Char "a"] [OCat]                                                                                       = Some ([Char "a"], [OGroup; OCat]).                                                                                     Proof. reflexivity. Qed.
+Goal parse_token (TChar "b") [Char "a"] [OGroup; OCat]                                                                           = Some ([Char "b"; Char "a"], [OGroup; OCat]).                                                                           Proof. reflexivity. Qed.
+Goal parse_token TAlt [Char "b"; Char "a"] [OGroup; OCat]                                                                        = Some ([Char "b"; Char "a"], [OAlt; OGroup; OCat]).                                                                     Proof. reflexivity. Qed.
+Goal parse_token (TChar "c") [Char "b"; Char "a"] [OAlt; OGroup; OCat]                                                           = Some ([Char "c"; Char "b"; Char "a"], [OAlt; OGroup; OCat]).                                                           Proof. reflexivity. Qed.
+Goal parse_token TStar [Char "c"; Char "b"; Char "a"] [OAlt; OGroup; OCat]                                                       = Some ([Char "c"; Char "b"; Char "a"], [OStar; OAlt; OGroup; OCat]).                                                    Proof. reflexivity. Qed.
+Goal parse_token TCat [Char "c"; Char "b"; Char "a"] [OStar; OAlt; OGroup; OCat]                                                 = Some ([Star (Char "c"); Char "b"; Char "a"], [OCat; OAlt; OGroup; OCat]).                                              Proof. Fail reflexivity. Admitted.
+Goal parse_token (TChar "d") [Star (Char "c"); Char "b"; Char "a"] [OCat; OAlt; OGroup; OCat]                                    = Some ([Char "d"; Star (Char "c"); Char "b"; Char "a"], [OCat; OAlt; OGroup; OCat]).                                    Proof. reflexivity. Qed.
+Goal parse_token TParenR [Char "d"; Star (Char "c"); Char "b"; Char "a"] [OCat; OAlt; OGroup; OCat]                              = Some ([Alt (Char "b") (Cat (Star (Char "c")) (Char "d")); Char "a"], [OCat]).                                          Proof. Fail reflexivity. Admitted.
+Goal parse_token TStar [Alt (Char "b") (Cat (Star (Char "c")) (Char "d")); Char "a"] [OCat]                                      = Some ([Alt (Char "b") (Cat (Star (Char "c")) (Char "d")); Char "a"], [OStar; OCat]).                                   Proof. reflexivity. Qed.
+Goal parse_token TCat [Alt (Char "b") (Cat (Star (Char "c")) (Char "d")); Char "a"] [OStar; OCat]                                = Some ([Star (Alt (Char "b") (Cat (Star (Char "c")) (Char "d"))); Char "a"], [OCat; OCat]).                             Proof. Fail reflexivity. Admitted.
+Goal parse_token (TChar "e") [Star (Alt (Char "b") (Cat (Star (Char "c")) (Char "d"))); Char "a"] [OCat; OCat]                   = Some ([Char "e"; Star (Alt (Char "b") (Cat (Star (Char "c")) (Char "d"))); Char "a"], [OCat; OCat]).                   Proof. reflexivity. Qed.
+Goal parse_token TAnd [Char "e"; Star (Alt (Char "b") (Cat (Star (Char "c")) (Char "d"))); Char "a"] [OCat; OCat]                = Some ([Cat (Char "a") (Cat (Star (Alt (Char "b") (Cat (Star (Char "c")) (Char "d")))) (Char "e"))], [OAnd]).           Proof. Fail reflexivity. Admitted.
+Goal parse_token (TChar "f") [Cat (Char "a") (Cat (Star (Alt (Char "b") (Cat (Star (Char "c")) (Char "d")))) (Char "e"))] [OAnd] = Some ([Char "f"; Cat (Char "a") (Cat (Star (Alt (Char "b") (Cat (Star (Char "c")) (Char "d")))) (Char "e"))], [OAnd]). Proof. reflexivity. Qed.
