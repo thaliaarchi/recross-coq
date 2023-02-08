@@ -399,9 +399,18 @@ Lemma And_Nil_false_r : forall re,
 Proof.
   intros. now rewrite And_comm, And_Nil_false_l. Qed.
 
-Lemma str_matches_regexp_of_str : forall s,
-  list_ascii_of_string s =~ regexp_of_string s.
+Lemma str_matches_regexp_of_str : forall s s',
+  s' =~ regexp_of_string s <-> s' = list_ascii_of_string s.
 Proof.
-  induction s.
-  - apply MNil.
-  - destruct s. apply MChar. now apply Cat_Char_l. Qed.
+  split; generalize dependent s'.
+  - induction s; intros.
+    + now invert H.
+    + destruct s.
+      * now invert H.
+      * invert H. invert H3. cbn. f_equal. now apply IHs.
+  - induction s; intros; subst.
+    + apply MNil.
+    + destruct s.
+      * apply MChar.
+      * cbn. now apply Cat_Char_l, IHs.
+Qed.

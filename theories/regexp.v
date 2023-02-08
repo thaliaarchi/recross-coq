@@ -13,28 +13,12 @@ Inductive regexp :=
   | Alt (re1 re2 : regexp)
   | And (re1 re2 : regexp).
 
-Declare Custom Entry regexp.
-Declare Scope regexp_scope.
-Notation "// re //" := re (at level 0, re custom regexp at level 99) : regexp_scope.
-Notation "( re )" := re (in custom regexp, re at level 99) : regexp_scope.
-Notation "x" := x (in custom regexp at level 0, x constr at level 0) : regexp_scope.
-Notation "'∅'" := Void (in custom regexp) : regexp_scope.
-Notation "'ε'" := Nil (in custom regexp) : regexp_scope.
-Notation "[ c1 , c2 , .. , cn ]" := (Class (cons c1 (cons c2 .. (cons cn nil) ..))) (in custom regexp) : regexp_scope.
-Notation "re *" := (Star re) (in custom regexp at level 35, left associativity, format "re *") : regexp_scope.
-Notation "re1 ; re2" := (Cat re1 re2) (in custom regexp at level 40, left associativity) : regexp_scope.
-Notation "re1 | re2" := (Alt re1 re2) (in custom regexp at level 50, left associativity) : regexp_scope.
-Notation "re1 & re2" := (And re1 re2) (in custom regexp at level 50, left associativity) : regexp_scope.
-
 Fixpoint regexp_of_string (s : string) : regexp :=
   match s with
   | String c "" => Char c
   | String c s' => Cat (Char c) (regexp_of_string s')
   | "" => Nil
   end.
-
-Coercion Char : ascii >-> regexp.
-Coercion regexp_of_string : string >-> regexp.
 
 Reserved Notation "s =~ re" (at level 80).
 
