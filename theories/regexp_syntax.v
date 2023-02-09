@@ -178,10 +178,11 @@ Inductive parse_op :=
 
 Definition op_precedence (op : parse_op) : nat :=
   match op with
-  | OGroup => 0
-  | OCat => 1
-  | OAlt | OAnd => 2
+  | OAnd => 0
+  | OAlt => 1
+  | OCat => 2
   | OStar => 3
+  | OGroup => 4
   end.
 
 Definition op_left_associative (op : parse_op) : bool :=
@@ -193,44 +194,50 @@ Definition op_left_associative (op : parse_op) : bool :=
 
 (*
   Operator precedence (lowest to highest):
-  - OGroup
-  - OCat (right associativity)
-  - OAlt, OAnd (right associativity)
-  - OStar (left associativity)
+  - OAnd (right)
+  - OAlt (right)
+  - OCat (right)
+  - OStar (left)
+  - OGroup (right)
+
+  Left associative: greater than or equal
+  Right associative: greater than
 *)
 Definition greater_precedence (op1 op2 : parse_op) : bool :=
   match op1, op2 with
-  | (OAlt | OAnd), OCat => true (* left associative, so greater than *)
-  | OStar, _ => true (* right associative, so greater than or equal *)
+  | OAnd, _ => false
+  | OAlt, OAnd => true
+  | OCat, (OAlt | OAnd) => true
+  | OStar, (OStar | OCat | OAlt | OAnd) => true
+  | OGroup, _ => true
   | _, _ => false
   end.
 
-Definition apply_op op rs ops : option (list regexp * list parse_op) :=
+Definition apply_op op rs : option (list regexp) :=
   match op, rs with
-  | OGroup, _ => Some (rs, ops)
-  | OCat, re2 :: re1 :: rs' => Some (Cat re1 re2 :: rs', ops)
-  | OAlt, re2 :: re1 :: rs' => Some (Alt re1 re2 :: rs', ops)
-  | OAnd, re2 :: re1 :: rs' => Some (And re1 re2 :: rs', ops)
-  | OStar, re :: rs' => Some (Star re :: rs', ops)
+  | OGroup, _ => Some rs
+  | OCat, re2 :: re1 :: rs' => Some (Cat re1 re2 :: rs')
+  | OAlt, re2 :: re1 :: rs' => Some (Alt re1 re2 :: rs')
+  | OAnd, re2 :: re1 :: rs' => Some (And re1 re2 :: rs')
+  | OStar, re :: rs' => Some (Star re :: rs')
   | _, _ => None
   end.
 
 Definition parse_token (t : token) (rs : list regexp) (ops : list parse_op) : option (list regexp * list parse_op) :=
   let fix close_group rs ops :=
-    match ops, rs with
-    | OGroup :: ops', _ => Some (rs, ops')
-    | OCat :: ops', re2 :: re1 :: rs' => Some (Cat re1 re2 :: rs', ops')
-    | OAlt :: ops', re2 :: re1 :: rs' => Some (Alt re1 re2 :: rs', ops')
-    | OAnd :: ops', re2 :: re1 :: rs' => Some (And re1 re2 :: rs', ops')
-    | OStar :: ops', re :: rs' => Some (Star re :: rs', ops')
-    | _, _ => None
+    match ops with
+    | OGroup :: ops' => Some (rs, ops')
+    | op :: ops' =>
+        if apply_op op rs is Some rs' then close_group rs' ops' else None
+    | [] => None
     end in
   let fix push_op op rs ops :=
     match ops with
+    | OGroup :: _ | [] => Some (rs, op :: ops)
     | op2 :: ops' =>
-        if greater_precedence op2 op then apply_op op2 rs ops'
+        if greater_precedence op2 op then
+          if apply_op op2 rs is Some rs' then push_op op rs' ops' else None
         else Some (rs, op :: ops)
-    | [] => Some (rs, op :: ops)
     end in
   match t with
   | TNil => Some (Nil :: rs, ops)
@@ -245,29 +252,30 @@ Definition parse_token (t : token) (rs : list regexp) (ops : list parse_op) : op
   | TErr => None
   end%char.
 
-Definition parse (ts : list token) : option regexp :=
+Definition parse_tokens (ts : list token) : option regexp :=
+  let fix fold_ops rs ops :=
+    match ops, rs with
+    | op :: ops', _ =>
+        if apply_op op rs is Some rs'
+        then fold_ops rs' ops' else None
+    | [], [re] => Some re
+    | [], _ => None
+    end in
   let fix parse_rec ts rs ops :=
     match ts with
-    | t :: ts' => if parse_token t rs ops is Some (rs', ops')
-                  then parse_rec ts' rs' ops' else None
-    | [] => None (* TODO *)
+    | t :: ts' =>
+        if parse_token t rs ops is Some (rs', ops')
+        then parse_rec ts' rs' ops' else None
+    | [] => fold_ops rs ops
     end in
   parse_rec ts [] [].
 
-Goal lex "a(b|c*d)*e&f" = [TChar "a"; TCat; TParenL; TChar "b"; TAlt; TChar "c"; TStar; TCat; TChar "d"; TParenR; TStar; TCat; TChar "e"; TAnd; TChar "f"].                                                                                               Proof. reflexivity. Qed.
-Goal parse (lex "a(b|c*d)*e&f") = Some (And (Cat (Char "a") (Cat (Star (Alt (Char "b") (Cat (Star (Char "c")) (Char "d")))) (Char "e"))) (Char "f")).                                                                                                     Proof. Fail reflexivity. Admitted.
-Goal parse_token (TChar "a") [] []                                                                                               = Some ([Char "a"], []).                                                                                                 Proof. reflexivity. Qed.
-Goal parse_token TCat [Char "a"] []                                                                                              = Some ([Char "a"], [OCat]).                                                                                             Proof. reflexivity. Qed.
-Goal parse_token TParenL [Char "a"] [OCat]                                                                                       = Some ([Char "a"], [OGroup; OCat]).                                                                                     Proof. reflexivity. Qed.
-Goal parse_token (TChar "b") [Char "a"] [OGroup; OCat]                                                                           = Some ([Char "b"; Char "a"], [OGroup; OCat]).                                                                           Proof. reflexivity. Qed.
-Goal parse_token TAlt [Char "b"; Char "a"] [OGroup; OCat]                                                                        = Some ([Char "b"; Char "a"], [OAlt; OGroup; OCat]).                                                                     Proof. reflexivity. Qed.
-Goal parse_token (TChar "c") [Char "b"; Char "a"] [OAlt; OGroup; OCat]                                                           = Some ([Char "c"; Char "b"; Char "a"], [OAlt; OGroup; OCat]).                                                           Proof. reflexivity. Qed.
-Goal parse_token TStar [Char "c"; Char "b"; Char "a"] [OAlt; OGroup; OCat]                                                       = Some ([Char "c"; Char "b"; Char "a"], [OStar; OAlt; OGroup; OCat]).                                                    Proof. reflexivity. Qed.
-Goal parse_token TCat [Char "c"; Char "b"; Char "a"] [OStar; OAlt; OGroup; OCat]                                                 = Some ([Star (Char "c"); Char "b"; Char "a"], [OCat; OAlt; OGroup; OCat]).                                              Proof. Fail reflexivity. Admitted.
-Goal parse_token (TChar "d") [Star (Char "c"); Char "b"; Char "a"] [OCat; OAlt; OGroup; OCat]                                    = Some ([Char "d"; Star (Char "c"); Char "b"; Char "a"], [OCat; OAlt; OGroup; OCat]).                                    Proof. reflexivity. Qed.
-Goal parse_token TParenR [Char "d"; Star (Char "c"); Char "b"; Char "a"] [OCat; OAlt; OGroup; OCat]                              = Some ([Alt (Char "b") (Cat (Star (Char "c")) (Char "d")); Char "a"], [OCat]).                                          Proof. Fail reflexivity. Admitted.
-Goal parse_token TStar [Alt (Char "b") (Cat (Star (Char "c")) (Char "d")); Char "a"] [OCat]                                      = Some ([Alt (Char "b") (Cat (Star (Char "c")) (Char "d")); Char "a"], [OStar; OCat]).                                   Proof. reflexivity. Qed.
-Goal parse_token TCat [Alt (Char "b") (Cat (Star (Char "c")) (Char "d")); Char "a"] [OStar; OCat]                                = Some ([Star (Alt (Char "b") (Cat (Star (Char "c")) (Char "d"))); Char "a"], [OCat; OCat]).                             Proof. Fail reflexivity. Admitted.
-Goal parse_token (TChar "e") [Star (Alt (Char "b") (Cat (Star (Char "c")) (Char "d"))); Char "a"] [OCat; OCat]                   = Some ([Char "e"; Star (Alt (Char "b") (Cat (Star (Char "c")) (Char "d"))); Char "a"], [OCat; OCat]).                   Proof. reflexivity. Qed.
-Goal parse_token TAnd [Char "e"; Star (Alt (Char "b") (Cat (Star (Char "c")) (Char "d"))); Char "a"] [OCat; OCat]                = Some ([Cat (Char "a") (Cat (Star (Alt (Char "b") (Cat (Star (Char "c")) (Char "d")))) (Char "e"))], [OAnd]).           Proof. Fail reflexivity. Admitted.
-Goal parse_token (TChar "f") [Cat (Char "a") (Cat (Star (Alt (Char "b") (Cat (Star (Char "c")) (Char "d")))) (Char "e"))] [OAnd] = Some ([Char "f"; Cat (Char "a") (Cat (Star (Alt (Char "b") (Cat (Star (Char "c")) (Char "d")))) (Char "e"))], [OAnd]). Proof. reflexivity. Qed.
+Definition parse (s : string) : option regexp :=
+  parse_tokens (lex s).
+
+Goal parse "ab(cd|e*f|)*g&abcd"
+= Some (And (Cat (Char "a") (Cat (Char "b") (Cat (Star (Alt (Cat (Char "c") (Char "d"))
+                                                            (Alt (Cat (Star (Char "e")) (Char "f")) Nil)))
+                                                 (Char "g"))))
+            (Cat (Char "a") (Cat (Char "b") (Cat (Char "c") (Char "d"))))).
+Proof. reflexivity. Qed.
