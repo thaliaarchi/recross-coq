@@ -47,7 +47,7 @@ Proof.
   - assumption.
   - rewrite <- app_assoc. now apply MStarApp, IHn. Qed.
 
-Lemma plus_le : forall n m p,
+Lemma add_le : forall n m p,
   n + m <= p -> n <= p /\ m <= p.
 Proof.
   intros. induction H.
@@ -71,31 +71,46 @@ Proof.
     + invert H.
     + invert Hlen. invert H1.
   - invert Hlen. apply pumping_constant_ne_0 in H0 as [].
-  - admit.
   - rewrite app_length in Hlen.
-    apply Nat.add_le_cases in Hlen as [Hlen | Hlen].
-    + apply IHre_match1 in Hlen as [s11 [s12 [s13 [? []]]]]. subst.
+    destruct (le_lt_dec (pumping_constant re) (length s1)) as [Hlen1 | _].
+    + apply IHre_match1 in Hlen1 as [s11 [s12 [s13 [? []]]]]. subst.
+      exists s11, s12, (s13 ++ s2). repeat split.
+      * now rewrite <- (app_assoc s11 _ _), <- app_assoc.
+      * assumption.
+      * intros. rewrite (app_assoc _ _ s2), app_assoc. now apply MStarApp.
+    + destruct (Nat.eq_dec (length s1) 0) as [Heq | Heq].
+      * rewrite Heq in Hlen.
+        apply IHre_match2 in Hlen as [s21 [s22 [s23 [? []]]]]. subst.
+        exists (s1 ++ s21), s22, s23. repeat split.
+        -- now rewrite <- app_assoc.
+        -- assumption.
+        -- intros. rewrite <- app_assoc. apply MStarApp. assumption. apply H3.
+      * exists [], s1, s2. repeat split.
+        -- intro. destruct s1. now apply Heq. discriminate.
+        -- intros. now apply Star_napp.
+  - rewrite app_length in Hlen.
+    apply Nat.add_le_cases in Hlen as [Hlen1 | Hlen2].
+    + apply IHre_match1 in Hlen1 as [s11 [s12 [s13 [? []]]]]. subst.
       exists s11, s12, (s13 ++ s2). repeat split.
       * now rewrite <- app_assoc, <- app_assoc.
       * assumption.
-      * intros. rewrite app_assoc, app_assoc. apply MCat.
-        now rewrite <- app_assoc. assumption.
-    + apply IHre_match2 in Hlen as [s21 [s22 [s23 [? []]]]]. subst.
+      * intros. rewrite (app_assoc _ _ s2), app_assoc. now apply MCat.
+    + apply IHre_match2 in Hlen2 as [s21 [s22 [s23 [? []]]]]. subst.
       exists (s1 ++ s21), s22, s23. repeat split.
       * now rewrite app_assoc.
       * assumption.
       * intros. rewrite <- app_assoc. now apply MCat.
-  - apply plus_le in Hlen as [Hlen _].
-    apply IHre_match in Hlen as [s11 [s12 [s13 [? []]]]]. subst.
+  - apply add_le in Hlen as [Hlen1 _].
+    apply IHre_match in Hlen1 as [s11 [s12 [s13 [? []]]]]. subst.
     exists s11, s12, s13. repeat split.
     + assumption.
     + intros. now apply MAltL.
-  - apply plus_le in Hlen as [_ Hlen].
-    apply IHre_match in Hlen as [s21 [s22 [s23 [? []]]]]. subst.
+  - apply add_le in Hlen as [_ Hlen2].
+    apply IHre_match in Hlen2 as [s21 [s22 [s23 [? []]]]]. subst.
     exists s21, s22, s23. repeat split.
     + assumption.
     + intros. now apply MAltR.
-  - apply plus_le in Hlen as [Hlen1 Hlen2].
+  - apply add_le in Hlen as [Hlen1 Hlen2].
     apply IHre_match1 in Hlen1 as [s11 [s12 [s13 [? []]]]].
     apply IHre_match2 in Hlen2 as [s21 [s22 [s23 [? []]]]].
     exists s11, s12, s13. repeat split.
