@@ -56,12 +56,13 @@ Proof.
     now split.
 Qed.
 
-Lemma weak_pumping : forall re s,
+Lemma pumping : forall re s,
   s =~ re ->
   pumping_constant re <= length s ->
   exists s1 s2 s3,
     s = s1 ++ s2 ++ s3 /\
     s2 <> [] /\
+    length s1 + length s2 <= pumping_constant re /\
     forall n, s1 ++ napp s2 n ++ s3 =~ re.
 Proof.
   intros re s H Hlen. induction H; cbn in *.
@@ -72,49 +73,64 @@ Proof.
     + invert Hlen. invert H1.
   - invert Hlen. apply pumping_constant_ne_0 in H0 as [].
   - rewrite app_length in Hlen.
-    destruct (le_lt_dec (pumping_constant re) (length s1)) as [Hlen1 | _].
-    + apply IHre_match1 in Hlen1 as [s11 [s12 [s13 [? []]]]]. subst.
+    destruct (le_lt_dec (pumping_constant re) (length s1)) as [Hlen1 | Hlen1].
+    + apply IHre_match1 in Hlen1 as [s11 [s12 [s13 [? [? []]]]]]. subst.
       exists s11, s12, (s13 ++ s2). repeat split.
       * now rewrite <- (app_assoc s11 _ _), <- app_assoc.
       * assumption.
+      * assumption.
       * intros. rewrite (app_assoc _ _ s2), app_assoc. now apply MStarApp.
     + destruct (Nat.eq_dec (length s1) 0) as [Heq | Heq].
-      * rewrite Heq in Hlen.
-        apply IHre_match2 in Hlen as [s21 [s22 [s23 [? []]]]]. subst.
-        exists (s1 ++ s21), s22, s23. repeat split.
-        -- now rewrite <- app_assoc.
-        -- assumption.
-        -- intros. rewrite <- app_assoc. apply MStarApp. assumption. apply H3.
+      * apply length_zero_iff_nil in Heq. subst. apply IHre_match2, Hlen.
       * exists [], s1, s2. repeat split.
         -- intro. destruct s1. now apply Heq. discriminate.
+        -- now apply Nat.lt_le_incl.
         -- intros. now apply Star_napp.
   - rewrite app_length in Hlen.
     apply Nat.add_le_cases in Hlen as [Hlen1 | Hlen2].
-    + apply IHre_match1 in Hlen1 as [s11 [s12 [s13 [? []]]]]. subst.
+    + apply IHre_match1 in Hlen1 as [s11 [s12 [s13 [? [? []]]]]]. subst.
       exists s11, s12, (s13 ++ s2). repeat split.
       * now rewrite <- app_assoc, <- app_assoc.
       * assumption.
+      * now apply Arith_prebase.le_plus_trans_stt.
       * intros. rewrite (app_assoc _ _ s2), app_assoc. now apply MCat.
-    + apply IHre_match2 in Hlen2 as [s21 [s22 [s23 [? []]]]]. subst.
-      exists (s1 ++ s21), s22, s23. repeat split.
-      * now rewrite app_assoc.
-      * assumption.
-      * intros. rewrite <- app_assoc. now apply MCat.
+    + destruct (le_lt_dec (pumping_constant re1) (length s1)) as [Hlen1 | Hlen1].
+      * apply IHre_match1 in Hlen1 as [s11 [s12 [s13 [? [? []]]]]]. subst.
+        exists s11, s12, (s13 ++ s2). repeat split.
+        -- now repeat rewrite <- app_assoc.
+        -- assumption.
+        -- now apply Arith_prebase.le_plus_trans_stt.
+        -- intros. rewrite (app_assoc _ _ s2), app_assoc. apply MCat.
+          ++ apply H4.
+          ++ assumption.
+      * apply IHre_match2 in Hlen2 as [s21 [s22 [s23 [? [? []]]]]]. subst.
+        exists (s1 ++ s21), s22, s23. repeat split.
+        -- now rewrite app_assoc.
+        -- assumption.
+        -- rewrite app_length, <- Nat.add_assoc.
+           apply Nat.le_trans with (length s1 + pumping_constant re2).
+           ++ now apply Nat.add_le_mono_l.
+           ++ now apply Nat.add_le_mono_r, Nat.lt_le_incl.
+        -- intros. rewrite <- app_assoc. now apply MCat.
   - apply add_le in Hlen as [Hlen1 _].
-    apply IHre_match in Hlen1 as [s11 [s12 [s13 [? []]]]]. subst.
+    apply IHre_match in Hlen1 as [s11 [s12 [s13 [? [? []]]]]]. subst.
     exists s11, s12, s13. repeat split.
     + assumption.
+    + now apply Arith_prebase.le_plus_trans_stt.
     + intros. now apply MAltL.
   - apply add_le in Hlen as [_ Hlen2].
-    apply IHre_match in Hlen2 as [s21 [s22 [s23 [? []]]]]. subst.
+    apply IHre_match in Hlen2 as [s21 [s22 [s23 [? [? []]]]]]. subst.
     exists s21, s22, s23. repeat split.
     + assumption.
+    + rewrite (Nat.add_comm (pumping_constant re1) _).
+      now apply Arith_prebase.le_plus_trans_stt.
     + intros. now apply MAltR.
   - apply add_le in Hlen as [Hlen1 Hlen2].
-    apply IHre_match1 in Hlen1 as [s11 [s12 [s13 [? []]]]].
-    apply IHre_match2 in Hlen2 as [s21 [s22 [s23 [? []]]]].
+    apply IHre_match1 in Hlen1 as [s11 [s12 [s13 [? [? []]]]]].
+    apply IHre_match2 in Hlen2 as [s21 [s22 [s23 [? [? []]]]]].
     exists s11, s12, s13. repeat split.
     + assumption.
     + assumption.
-    + intros. apply MAnd. apply H3. admit.
+    + now apply Arith_prebase.le_plus_trans_stt.
+    + intros. apply MAnd. apply H4. admit.
 Admitted.
