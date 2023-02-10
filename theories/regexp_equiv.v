@@ -360,6 +360,16 @@ Proof.
   - invert H; invert H2; apply MCat; try assumption; [now apply MAltL | now apply MAltR].
 Qed.
 
+Lemma Cat_And_distr_l : forall re1 re2 re3 s,
+  s =~ Cat re1 (And re2 re3) -> s =~ And (Cat re1 re2) (Cat re1 re3).
+Proof.
+  intros. invert H. invert H4. apply MAnd; now apply MCat. Qed.
+
+Lemma Cat_And_distr_r : forall re1 re2 re3 s,
+  s =~ Cat (And re1 re2) re3 -> s =~ And (Cat re1 re3) (Cat re2 re3).
+Proof.
+  intros. invert H. invert H3. apply MAnd; now apply MCat. Qed.
+
 Lemma Cat_nil : forall re1 re2,
   [] =~ Cat re1 re2 <-> [] =~ re1 /\ [] =~ re2.
 Proof.
@@ -466,6 +476,22 @@ Lemma And_Nil_false_r : forall re,
   matches_nil re = false -> And re Nil <=> Void.
 Proof.
   intros. now rewrite And_comm, And_Nil_false_l. Qed.
+
+Lemma And_Alt_distr_l : forall re1 re2 re3,
+  And re1 (Alt re2 re3) <=> Alt (And re1 re2) (And re1 re3).
+Proof.
+  split; intros.
+  - invert H. invert H4. now apply MAltL, MAnd. now apply MAltR, MAnd.
+  - invert H; invert H2. now apply MAnd, MAltL. now apply MAnd, MAltR.
+Qed.
+
+Lemma And_Alt_distr_r : forall re1 re2 re3,
+  And (Alt re1 re2) re3 <=> Alt (And re1 re3) (And re2 re3).
+Proof.
+  split; intros.
+  - invert H. invert H3. now apply MAltL, MAnd. now apply MAltR, MAnd.
+  - invert H; invert H2; apply MAnd; try assumption. now apply MAltL. now apply MAltR.
+Qed.
 
 Lemma str_matches_regexp_of_str : forall s s',
   s' =~ regexp_of_string s <-> s' = list_ascii_of_string s.
