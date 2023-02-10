@@ -22,7 +22,7 @@ Fixpoint regexp_of_string (s : string) : regexp :=
 
 Reserved Notation "s =~ re" (at level 80).
 
-Inductive regexp_match : list ascii -> regexp -> Prop :=
+Inductive re_match : list ascii -> regexp -> Prop :=
   | MNil :
       [] =~ Nil
   | MChar c :
@@ -32,7 +32,7 @@ Inductive regexp_match : list ascii -> regexp -> Prop :=
       [c] =~ Class cs
   | MStar0 re :
       [] =~ Star re
-  | MStarCat s1 s2 re :
+  | MStarApp s1 s2 re :
       s1 =~ re ->
       s2 =~ Star re ->
       s1 ++ s2 =~ Star re
@@ -51,7 +51,7 @@ Inductive regexp_match : list ascii -> regexp -> Prop :=
       s =~ re2 ->
       s =~ And re1 re2
 
-  where "s =~ re" := (regexp_match s re).
+  where "s =~ re" := (re_match s re).
 
 Definition re_equiv (re re' : regexp) := forall s,
   s =~ re <-> s =~ re'.
@@ -115,10 +115,10 @@ Proof.
   split; intros.
   - dependent induction H0.
     + apply MStar0.
-    + apply MStarCat. now apply H. now apply IHregexp_match2 with x.
+    + apply MStarApp. now apply H. now apply IHre_match2 with x.
   - dependent induction H0.
     + apply MStar0.
-    + apply MStarCat. now apply H. now apply IHregexp_match2 with y.
+    + apply MStarApp. now apply H. now apply IHre_match2 with y.
 Qed.
 
 Add Morphism Cat
@@ -165,4 +165,16 @@ Fixpoint matches_nil (re : regexp) : bool :=
   | Cat re1 re2 => matches_nil re1 && matches_nil re2
   | Alt re1 re2 => matches_nil re1 || matches_nil re2
   | And re1 re2 => matches_nil re1 && matches_nil re2
+  end.
+
+Fixpoint re_chars (re : regexp) : list ascii :=
+  match re with
+  | Nil => []
+  | Void => []
+  | Char c => [c]
+  | Class cs => cs
+  | Star re => re_chars re
+  | Cat re1 re2 => re_chars re1 ++ re_chars re2
+  | Alt re1 re2 => re_chars re1 ++ re_chars re2
+  | And re1 re2 => re_chars re1 ++ re_chars re2
   end.

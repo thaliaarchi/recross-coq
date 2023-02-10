@@ -1,6 +1,27 @@
 Require Import Bool.
 From recross Require Import util regexp.
 
+Theorem chars_in_re : forall re c s,
+  s =~ re ->
+  In c s ->
+  In c (re_chars re).
+Proof.
+  intros. induction H; cbn in *.
+  - destruct H0.
+  - apply H0.
+  - destruct H0 as [| []]. now subst.
+  - destruct H0.
+  - apply in_app_iff in H0 as [].
+    + now apply IHre_match1.
+    + now apply IHre_match2.
+  - apply in_app_iff. apply in_app_iff in H0 as [].
+    + left. now apply IHre_match1.
+    + right. now apply IHre_match2.
+  - apply in_app_iff. left. now apply IHre_match.
+  - apply in_app_iff. right. now apply IHre_match.
+  - apply in_app_iff. left. now apply IHre_match1.
+Qed.
+
 Theorem is_void_true : forall re,
   is_void re = true -> re <=> Void.
 Proof.
@@ -22,6 +43,26 @@ Proof.
       * now apply (IHre1 H).
       * now apply (IHre2 H).
   - intros. invert H0.
+Qed.
+
+(* Not iff, because of And *)
+Theorem is_void_false : forall re,
+  (exists s, s =~ re) -> is_void re = false.
+Proof.
+  induction re; cbn; intros [s]; try reflexivity.
+  - invert H.
+  - invert H. destruct cs.
+    + invert H2.
+    + reflexivity.
+  - invert H. apply orb_false_iff. split.
+    + apply IHre1. now exists s1.
+    + apply IHre2. now exists s2.
+  - apply andb_false_iff. invert H.
+    + left. apply IHre1. now exists s.
+    + right. apply IHre2. now exists s.
+  - invert H. apply orb_false_iff. split.
+    + apply IHre1. now exists s.
+    + apply IHre2. now exists s.
 Qed.
 
 Theorem is_nil_true : forall re,
@@ -146,7 +187,7 @@ Qed.
 Lemma Star1 : forall re s,
   s =~ re -> s =~ Star re.
 Proof.
-  intros. rewrite <- (app_nil_r _). now apply MStarCat, MStar0. Qed.
+  intros. rewrite <- (app_nil_r _). now apply MStarApp, MStar0. Qed.
 
 Lemma Star_Void : Star Void <=> Nil.
 Proof.
@@ -159,20 +200,47 @@ Proof.
   split; intros.
   - dependent induction H.
     + apply MNil.
-    + invert H. now apply IHregexp_match2.
+    + invert H. now apply IHre_match2.
   - invert H. apply MStar0.
 Qed.
 
-Lemma Star_Cat : forall re s1 s2,
+Lemma Star_app : forall re s1 s2,
   s1 =~ Star re ->
   s2 =~ Star re ->
   s1 ++ s2 =~ Star re.
 Proof.
-  intros re s1 s2 H. generalize dependent s2.
-  dependent induction H; intros.
+  intros. dependent induction H; intros.
   - assumption.
-  - rewrite <- app_assoc. apply MStarCat. assumption.
-    now apply IHregexp_match2.
+  - rewrite <- app_assoc. apply MStarApp. assumption.
+    now apply IHre_match2.
+Qed.
+
+Lemma Star_concat : forall re ss,
+  (forall s, In s ss -> s =~ re) ->
+  concat ss =~ Star re.
+Proof.
+  intros. induction ss.
+  - apply MStar0.
+  - cbn. apply MStarApp.
+    + apply H. now left.
+    + apply IHss. intros. apply H. now right.
+Qed.
+
+Lemma Star_split : forall re s,
+  s =~ Star re ->
+  exists ss,
+    s = concat ss /\ forall s', In s' ss -> s' =~ re.
+Proof.
+  intros. dependent induction H.
+  - exists []. split.
+    + reflexivity.
+    + intros. invert H.
+  - assert (Star re = Star re) by reflexivity.
+    apply IHre_match2 in H1 as [ss []]. subst.
+    exists (s1 :: ss). split. reflexivity.
+    intros. invert H1.
+    + assumption.
+    + apply H2, H3.
 Qed.
 
 Lemma Star_idemp : forall re,
@@ -181,10 +249,10 @@ Proof.
   split; intros.
   - dependent induction H.
     + apply MStar0.
-    + apply Star_Cat. assumption. now apply IHregexp_match2.
+    + apply Star_app. assumption. now apply IHre_match2.
   - dependent induction H.
     + apply MStar0.
-    + apply MStarCat. now apply Star1. now apply IHregexp_match2.
+    + apply MStarApp. now apply Star1. now apply IHre_match2.
 Qed.
 
 Lemma Star_Alt_Nil_l : forall re,
@@ -193,11 +261,11 @@ Proof.
   split; intros;
   dependent induction H; try apply MStar0.
   - invert H.
-    + invert H3. now apply IHregexp_match2.
-    + apply MStarCat. assumption. now apply IHregexp_match2.
-  - apply MStarCat.
+    + invert H3. now apply IHre_match2.
+    + apply MStarApp. assumption. now apply IHre_match2.
+  - apply MStarApp.
     + now apply MAltR.
-    + now apply IHregexp_match2.
+    + now apply IHre_match2.
 Qed.
 
 Lemma Star_Alt_Nil_r : forall re,
@@ -206,11 +274,11 @@ Proof.
   split; intros;
   dependent induction H; try apply MStar0.
   - invert H.
-    + apply MStarCat. assumption. now apply IHregexp_match2.
-    + invert H3. now apply IHregexp_match2.
-  - apply MStarCat.
+    + apply MStarApp. assumption. now apply IHre_match2.
+    + invert H3. now apply IHre_match2.
+  - apply MStarApp.
     + now apply MAltL.
-    + now apply IHregexp_match2.
+    + now apply IHre_match2.
 Qed.
 
 Lemma Cat_Void_l : forall re,
@@ -273,7 +341,7 @@ Lemma Cat_Star : forall re,
   Cat (Star re) (Star re) <=> Star re.
 Proof.
   split; intros.
-  - invert H. now apply Star_Cat.
+  - invert H. now apply Star_app.
   - rewrite <- (app_nil_r _). now apply MCat, MStar0. Qed.
 
 Lemma Cat_Alt_distr_l : forall re1 re2 re3,
