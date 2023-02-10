@@ -1,5 +1,4 @@
 From recross Require Import util regexp.
-Local Open Scope string_scope.
 
 Local Notation "a ::: s" := (String a s) (at level 60, right associativity) : string_scope.
 Local Notation "a || b" := (if a then true else if b then true else false).
@@ -59,36 +58,6 @@ Lemma byte_to_hex_to_byte : forall c d1 d2,
 Proof.
   intros. destruct c as [[] [] [] [] [] [] [] []]; now invert H. Qed.
 
-Fixpoint regexp_to_string (re : regexp) : string :=
-  let paren_star := fun re s =>
-    match re with
-    | Nil => "()*"
-    | Cat _ _ | Alt _ _ | And _ _ => "(" ++ s ++ ")*"
-    | _ => s ++ "*"
-    end in
-  let paren_cat := fun re s =>
-    match re with
-    | Alt _ _ | And _ _ => "(" ++ s ++ ")"
-    | _ => s
-    end in
-  let paren_alt := fun re s =>
-    if re is And _ _ then "(" ++ s ++ ")" else s in
-  let paren_and := fun re s =>
-    if re is Alt _ _ then "(" ++ s ++ ")" else s in
-  match re with
-  | Void => "[]"
-  | Nil => ""
-  | Char c => String c ""
-  | Class cs => "[" ++ string_of_list_ascii cs ++ "]"
-  | Star re => paren_star re (regexp_to_string re)
-  | Cat re1 re2 => paren_cat re1 (regexp_to_string re1) ++
-                   paren_cat re2 (regexp_to_string re2)
-  | Alt re1 re2 => paren_alt re1 (regexp_to_string re1) ++ "|" ++
-                   paren_alt re2 (regexp_to_string re2)
-  | And re1 re2 => paren_and re1 (regexp_to_string re1) ++ "&" ++
-                   paren_and re2 (regexp_to_string re2)
-  end.
-
 Inductive token :=
   | TNil
   | TChar (c : ascii)
@@ -100,6 +69,85 @@ Inductive token :=
   | TParenL
   | TParenR
   | TErr.
+
+Inductive regexp_op :=
+  | OGroup
+  | OCat
+  | OAlt
+  | OAnd
+  | OStar.
+
+(*
+  Operator precedence (lowest to highest):
+  - OAnd (right)
+  - OAlt (right)
+  - OCat (right)
+  - OStar (left)
+  - OGroup (right)
+
+  Left associative: greater than or equal
+  Right associative: greater than
+*)
+Definition greater_precedence (op1 op2 : regexp_op) : bool :=
+  match op1, op2 with
+  | OAnd, _ => false
+  | OAlt, OAnd => true
+  | OCat, (OAlt | OAnd) => true
+  | OStar, (OStar | OCat | OAlt | OAnd) => true
+  | OGroup, _ => true
+  | _, _ => false
+  end.
+
+Definition re_op (re : regexp) : option regexp_op :=
+  match re with
+  | Void | Nil | Char _ | Class _ => None
+  | Star _ => Some OStar
+  | Cat _ _ => Some OCat
+  | Alt _ _ => Some OAlt
+  | And _ _ => Some OAnd
+  end.
+
+Definition re_greater_precedence (op1 : regexp_op) (re2 : regexp) : bool :=
+  if re_op re2 is Some op2 then greater_precedence op1 op2 else false.
+
+Fixpoint regexp_to_tokens (re : regexp) : list token :=
+  let fix maybe_paren op re :=
+    if re_greater_precedence op re then
+      [TParenL] ++ regexp_to_tokens re ++ [TParenR]
+    else regexp_to_tokens re in
+  match re with
+  | Void => [TClass []]
+  | Nil => [TNil]
+  | Char c => [TChar c]
+  | Class cs => [TClass cs]
+  | Star re => maybe_paren OStar re ++ [TStar]
+  | Cat re1 re2 => maybe_paren OCat re1 ++ [TCat] ++ maybe_paren OCat re2
+  | Alt re1 re2 => maybe_paren OAlt re1 ++ [TAlt] ++ maybe_paren OAlt re2
+  | And re1 re2 => maybe_paren OAnd re1 ++ [TAnd] ++ maybe_paren OAnd re2
+  end.
+
+Definition token_to_string (t : token) : string :=
+  match t with
+  | TNil => ""
+  | TChar c => String c ""
+  | TClass cs => "[" ++ string_of_list_ascii cs ++ "]"
+  | TStar => "*"
+  | TCat => ""
+  | TAlt => "|"
+  | TAnd => "&"
+  | TParenL => "("
+  | TParenR => ")"
+  | TErr => ""
+  end.
+
+Fixpoint tokens_to_string (ts : list token) : string :=
+  match ts with
+  | t :: ts' => token_to_string t ++ tokens_to_string ts'
+  | [] => ""
+  end.
+
+Definition regexp_to_string (re : regexp) : string :=
+  tokens_to_string (regexp_to_tokens re).
 
 Fixpoint lex_tokens (s : string) : list token :=
   match s with
@@ -154,65 +202,6 @@ Fixpoint insert_invisible (ts : list token) : list token :=
 Definition lex (s : string) : list token :=
   insert_invisible (lex_tokens s).
 
-Fixpoint tokens_to_string (ts : list token) : string :=
-  match ts with
-  | TNil :: ts' => tokens_to_string ts'
-  | TChar c :: ts' => String c (tokens_to_string ts')
-  | TClass cs :: ts' => "[" ++ string_of_list_ascii cs ++ "]" ++ tokens_to_string ts'
-  | TStar :: ts' => String "*" (tokens_to_string ts')
-  | TCat :: ts' => tokens_to_string ts'
-  | TAlt :: ts' => String "|" (tokens_to_string ts')
-  | TAnd :: ts' => String "&" (tokens_to_string ts')
-  | TParenL :: ts' => String "(" (tokens_to_string ts')
-  | TParenR :: ts' => String ")" (tokens_to_string ts')
-  | TErr :: ts' => tokens_to_string ts'
-  | [] => ""
-  end.
-
-Inductive parse_op :=
-  | OGroup
-  | OCat
-  | OAlt
-  | OAnd
-  | OStar.
-
-Definition op_precedence (op : parse_op) : nat :=
-  match op with
-  | OAnd => 0
-  | OAlt => 1
-  | OCat => 2
-  | OStar => 3
-  | OGroup => 4
-  end.
-
-Definition op_left_associative (op : parse_op) : bool :=
-  match op with
-  | OGroup => false
-  | OStar => true
-  | OCat | OAlt | OAnd => false
-  end.
-
-(*
-  Operator precedence (lowest to highest):
-  - OAnd (right)
-  - OAlt (right)
-  - OCat (right)
-  - OStar (left)
-  - OGroup (right)
-
-  Left associative: greater than or equal
-  Right associative: greater than
-*)
-Definition greater_precedence (op1 op2 : parse_op) : bool :=
-  match op1, op2 with
-  | OAnd, _ => false
-  | OAlt, OAnd => true
-  | OCat, (OAlt | OAnd) => true
-  | OStar, (OStar | OCat | OAlt | OAnd) => true
-  | OGroup, _ => true
-  | _, _ => false
-  end.
-
 Definition apply_op op rs : option (list regexp) :=
   match op, rs with
   | OGroup, _ => Some rs
@@ -223,7 +212,7 @@ Definition apply_op op rs : option (list regexp) :=
   | _, _ => None
   end.
 
-Definition parse_token (t : token) (rs : list regexp) (ops : list parse_op) : option (list regexp * list parse_op) :=
+Definition parse_token (t : token) (rs : list regexp) (ops : list regexp_op) : option (list regexp * list regexp_op) :=
   let fix close_group rs ops :=
     match ops with
     | OGroup :: ops' => Some (rs, ops')
