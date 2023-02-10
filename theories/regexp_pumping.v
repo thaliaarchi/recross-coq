@@ -1,0 +1,105 @@
+Require Import Arith.
+From recross Require Import util regexp.
+
+Fixpoint pumping_constant (re : regexp) : nat :=
+  match re with
+  | Void | Nil | Class [] => 1
+  | Char _ | Class _ => 2
+  | Star re => pumping_constant re
+  | Cat re1 re2 | Alt re1 re2 | And re1 re2 =>
+      pumping_constant re1 + pumping_constant re2
+  end.
+
+Lemma pumping_constant_ge_1 : forall re,
+  pumping_constant re >= 1.
+Proof.
+  induction re; cbn; try destruct cs; intuition. Qed.
+
+Lemma pumping_constant_ne_0 : forall re,
+  pumping_constant re <> 0.
+Proof.
+  intros re H.
+  assert (pumping_constant re >= 1) by apply pumping_constant_ge_1.
+  inversion H0.
+  - rewrite H in H2. discriminate.
+  - rewrite H in H1. discriminate.
+Qed.
+
+Fixpoint napp {T} (l : list T) (n : nat) : list T :=
+  match n with
+  | S n' => l ++ napp l n'
+  | 0 => []
+  end.
+
+Lemma napp_plus : forall T (l : list T) n m,
+  napp l (n + m) = napp l n ++ napp l m.
+Proof.
+  induction n; cbn; intros.
+  - reflexivity.
+  - now rewrite IHn, app_assoc. Qed.
+
+Lemma Star_napp : forall re n s1 s2,
+  s1 =~ re ->
+  s2 =~ Star re ->
+  napp s1 n ++ s2 =~ Star re.
+Proof.
+  induction n; cbn; intros.
+  - assumption.
+  - rewrite <- app_assoc. now apply MStarApp, IHn. Qed.
+
+Lemma plus_le : forall n m p,
+  n + m <= p -> n <= p /\ m <= p.
+Proof.
+  intros. induction H.
+  - split. apply Nat.le_add_r. apply Nat.le_add_l.
+  - destruct IHle. apply Nat.le_le_succ_r in H0. apply Nat.le_le_succ_r in H1.
+    now split.
+Qed.
+
+Lemma weak_pumping : forall re s,
+  s =~ re ->
+  pumping_constant re <= length s ->
+  exists s1 s2 s3,
+    s = s1 ++ s2 ++ s3 /\
+    s2 <> [] /\
+    forall n, s1 ++ napp s2 n ++ s3 =~ re.
+Proof.
+  intros re s H Hlen. induction H; cbn in *.
+  - invert Hlen.
+  - invert Hlen. invert H0.
+  - destruct cs.
+    + invert H.
+    + invert Hlen. invert H1.
+  - invert Hlen. apply pumping_constant_ne_0 in H0 as [].
+  - admit.
+  - rewrite app_length in Hlen.
+    apply Nat.add_le_cases in Hlen as [Hlen | Hlen].
+    + apply IHre_match1 in Hlen as [s11 [s12 [s13 [? []]]]]. subst.
+      exists s11, s12, (s13 ++ s2). repeat split.
+      * now rewrite <- app_assoc, <- app_assoc.
+      * assumption.
+      * intros. rewrite app_assoc, app_assoc. apply MCat.
+        now rewrite <- app_assoc. assumption.
+    + apply IHre_match2 in Hlen as [s21 [s22 [s23 [? []]]]]. subst.
+      exists (s1 ++ s21), s22, s23. repeat split.
+      * now rewrite app_assoc.
+      * assumption.
+      * intros. rewrite <- app_assoc. now apply MCat.
+  - apply plus_le in Hlen as [Hlen _].
+    apply IHre_match in Hlen as [s11 [s12 [s13 [? []]]]]. subst.
+    exists s11, s12, s13. repeat split.
+    + assumption.
+    + intros. now apply MAltL.
+  - apply plus_le in Hlen as [_ Hlen].
+    apply IHre_match in Hlen as [s21 [s22 [s23 [? []]]]]. subst.
+    exists s21, s22, s23. repeat split.
+    + assumption.
+    + intros. now apply MAltR.
+  - apply plus_le in Hlen as [Hlen1 Hlen2].
+    apply IHre_match1 in Hlen1 as [s11 [s12 [s13 [? []]]]].
+    apply IHre_match2 in Hlen2 as [s21 [s22 [s23 [? []]]]].
+    exists s11, s12, s13. repeat split.
+    + assumption.
+    + assumption.
+    + intros. apply MAnd. apply H3. admit.
+Admitted.
