@@ -211,8 +211,7 @@ Lemma Star_app : forall re s1 s2,
 Proof.
   intros. dependent induction H; intros.
   - assumption.
-  - rewrite <- app_assoc. apply MStarApp. assumption.
-    now apply IHre_match2.
+  - rewrite <- app_assoc. now apply MStarApp, IHre_match2.
 Qed.
 
 Lemma Star_concat : forall re ss,
@@ -249,7 +248,7 @@ Proof.
   split; intros.
   - dependent induction H.
     + apply MStar0.
-    + apply Star_app. assumption. now apply IHre_match2.
+    + now apply Star_app, IHre_match2.
   - dependent induction H.
     + apply MStar0.
     + apply MStarApp. now apply Star1. now apply IHre_match2.
@@ -262,7 +261,7 @@ Proof.
   dependent induction H; try apply MStar0.
   - invert H.
     + invert H3. now apply IHre_match2.
-    + apply MStarApp. assumption. now apply IHre_match2.
+    + now apply MStarApp, IHre_match2.
   - apply MStarApp.
     + now apply MAltR.
     + now apply IHre_match2.
@@ -274,7 +273,7 @@ Proof.
   split; intros;
   dependent induction H; try apply MStar0.
   - invert H.
-    + apply MStarApp. assumption. now apply IHre_match2.
+    + now apply MStarApp, IHre_match2.
     + invert H3. now apply IHre_match2.
   - apply MStarApp.
     + now apply MAltL.
@@ -297,6 +296,13 @@ Proof.
   split; intros.
   - invert H. now invert H3.
   - rewrite <- (app_nil_l _). apply MCat. apply MNil. assumption. Qed.
+
+Lemma Cat_Nil_r : forall re,
+  Cat re Nil <=> re.
+Proof.
+  split; intros.
+  - invert H. invert H4. now rewrite app_nil_r.
+  - rewrite <- (app_nil_r _). now apply MCat, MNil. Qed.
 
 Lemma Cat_Char_l : forall re c s,
   c :: s =~ Cat (Char c) re <-> s =~ re.
@@ -330,13 +336,6 @@ Proof.
   - invert H0. invert H5. apply app_inj_tail_iff in H1 as []. now subst.
   - now apply MCat, MClass. Qed.
 
-Lemma Cat_Nil_r : forall re,
-  Cat re Nil <=> re.
-Proof.
-  split; intros.
-  - invert H. invert H4. now rewrite app_nil_r.
-  - rewrite <- (app_nil_r _). now apply MCat, MNil. Qed.
-
 Lemma Cat_Star : forall re,
   Cat (Star re) (Star re) <=> Star re.
 Proof.
@@ -348,16 +347,17 @@ Lemma Cat_Alt_distr_l : forall re1 re2 re3,
   Cat re1 (Alt re2 re3) <=> Alt (Cat re1 re2) (Cat re1 re3).
 Proof.
   split; intros.
-  - invert H; invert H4; [apply MAltL | apply MAltR]; now apply MCat.
-  - invert H; invert H2; [now apply MCat, MAltL | now apply MCat, MAltR].
+  - invert H; invert H4. now apply MAltL, MCat. now apply MAltR, MCat.
+  - invert H; invert H2. now apply MCat, MAltL. now apply MCat, MAltR.
 Qed.
 
 Lemma Cat_Alt_distr_r : forall re1 re2 re3,
   Cat (Alt re1 re2) re3 <=> Alt (Cat re1 re3) (Cat re2 re3).
 Proof.
   split; intros.
-  - invert H; invert H3; [apply MAltL | apply MAltR]; now apply MCat.
-  - invert H; invert H2; apply MCat; try assumption; [now apply MAltL | now apply MAltR].
+  - invert H; invert H3. now apply MAltL, MCat. now apply MAltR, MCat.
+  - invert H; invert H2; apply MCat; try assumption.
+    now apply MAltL. now apply MAltR.
 Qed.
 
 Lemma Cat_And_distr_l : forall re1 re2 re3 s,
@@ -490,7 +490,8 @@ Lemma And_Alt_distr_r : forall re1 re2 re3,
 Proof.
   split; intros.
   - invert H. invert H3. now apply MAltL, MAnd. now apply MAltR, MAnd.
-  - invert H; invert H2; apply MAnd; try assumption. now apply MAltL. now apply MAltR.
+  - invert H; invert H2; apply MAnd; try assumption.
+    now apply MAltL. now apply MAltR.
 Qed.
 
 Lemma str_matches_regexp_of_str : forall s s',
