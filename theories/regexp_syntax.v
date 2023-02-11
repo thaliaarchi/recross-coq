@@ -22,12 +22,6 @@ Definition hex_to_nibble (c : ascii) : option (bool * bool * bool * bool) :=
   else if ascii_dec c "f" || ascii_dec c "F" then Some (true, true, true, true)
   else None.
 
-Definition hex_to_byte (c1 c2 : ascii) : option ascii :=
-  match hex_to_nibble c1, hex_to_nibble c2 with
-  | Some (b4, b5, b6, b7), Some (b0, b1, b2, b3) => Some (Ascii b0 b1 b2 b3 b4 b5 b6 b7)
-  | _, _ => None
-  end.
-
 Definition nibble_to_hex (b0 b1 b2 b3 : bool) : ascii :=
   match b0, b1, b2, b3 with
   | false, false, false, false => "0"
@@ -48,6 +42,12 @@ Definition nibble_to_hex (b0 b1 b2 b3 : bool) : ascii :=
   | true,  true,  true,  true  => "f"
   end.
 
+Definition hex_to_byte (c1 c2 : ascii) : option ascii :=
+  match hex_to_nibble c1, hex_to_nibble c2 with
+  | Some (b4, b5, b6, b7), Some (b0, b1, b2, b3) => Some (Ascii b0 b1 b2 b3 b4 b5 b6 b7)
+  | _, _ => None
+  end.
+
 Definition byte_to_hex (c : ascii) : ascii * ascii :=
   let (b0, b1, b2, b3, b4, b5, b6, b7) := c in
   (nibble_to_hex b4 b5 b6 b7, nibble_to_hex b0 b1 b2 b3).
@@ -57,6 +57,81 @@ Lemma byte_to_hex_to_byte : forall c d1 d2,
   hex_to_byte d1 d2 = Some c.
 Proof.
   intros. destruct c as [[] [] [] [] [] [] [] []]; now invert H. Qed.
+
+Definition needs_slash (c : ascii) : bool :=
+  if ascii_dec c "(" || ascii_dec c ")" || ascii_dec c "[" || ascii_dec c "]" ||
+     ascii_dec c "*" || ascii_dec c "|" || ascii_dec c "&" || ascii_dec c "\" then true else false.
+
+Definition is_digit (c : ascii) : bool :=
+  if ascii_dec c "0" || ascii_dec c "1" || ascii_dec c "2" || ascii_dec c "3" ||
+     ascii_dec c "4" || ascii_dec c "5" || ascii_dec c "6" || ascii_dec c "7" ||
+     ascii_dec c "8" || ascii_dec c "9" then true else false.
+
+Definition is_non_printable (c : ascii) : bool :=
+  if match c with
+     | Ascii _ _ _ _ _ false false false | Ascii _ _ _ _ _ _ _ true => true
+     | _ => false
+     end || ascii_dec c "127" then true else false.
+
+Definition escape_byte_hex (c : ascii) : string :=
+  "\" ::: "x" ::: let (h1, h2) := byte_to_hex c in h1 ::: h2 ::: "".
+
+Definition escape_byte (c : ascii) : string :=
+  if needs_slash c then "\" ::: c ::: ""
+  else if ascii_dec c "007" then "\a"
+  else if ascii_dec c "012" then "\f"
+  else if ascii_dec c "009" then "\t"
+  else if ascii_dec c "010" then "\n"
+  else if ascii_dec c "013" then "\r"
+  else if ascii_dec c "011" then "\v"
+  else if is_non_printable c then escape_byte_hex c
+  else c ::: "".
+
+Definition unescape_byte (c : ascii) : option ascii :=
+  (if needs_slash c then Some c
+  else if ascii_dec c "a" then Some "007"
+  else if ascii_dec c "f" then Some "012"
+  else if ascii_dec c "t" then Some "009"
+  else if ascii_dec c "n" then Some "010"
+  else if ascii_dec c "r" then Some "013"
+  else if ascii_dec c "v" then Some "011"
+  else None)%char.
+
+Fixpoint escape_string (s : string) : string :=
+  match s with
+  | c ::: s' => escape_byte c ++ escape_string s'
+  | "" => ""
+  end.
+
+Lemma escape_byte_hex_length : forall c,
+  String.length (escape_byte_hex c) = 4.
+Proof. now destruct c as [[] [] [] [] [] [] [] []]. Qed.
+
+Lemma escape_unescape_byte : forall u e,
+  escape_byte u = "\" ::: e ::: "" <-> unescape_byte e = Some u.
+Proof.
+  unfold escape_byte, unescape_byte.
+  split; intros.
+  - destruct (needs_slash u) eqn:Hs. { invert H. now rewrite Hs. }
+    destruct (ascii_dec u "007"). { now invert H. }
+    destruct (ascii_dec u "012"). { now invert H. }
+    destruct (ascii_dec u "009"). { now invert H. }
+    destruct (ascii_dec u "010"). { now invert H. }
+    destruct (ascii_dec u "013"). { now invert H. }
+    destruct (ascii_dec u "011"). { now invert H. }
+    destruct (is_non_printable u) eqn:Hp.
+    { apply (f_equal String.length) in H.
+      rewrite escape_byte_hex_length in H. discriminate H. }
+    discriminate H.
+  - destruct (needs_slash e) eqn:Hs. { invert H. now rewrite Hs. }
+    destruct (ascii_dec e "a"). { now invert H. }
+    destruct (ascii_dec e "f"). { now invert H. }
+    destruct (ascii_dec e "t"). { now invert H. }
+    destruct (ascii_dec e "n"). { now invert H. }
+    destruct (ascii_dec e "r"). { now invert H. }
+    destruct (ascii_dec e "v"). { now invert H. }
+    discriminate H.
+Qed.
 
 Inductive token :=
   | TNil
@@ -129,8 +204,8 @@ Fixpoint regexp_to_tokens (re : regexp) : list token :=
 Definition token_to_string (t : token) : string :=
   match t with
   | TNil => ""
-  | TChar c => String c ""
-  | TClass cs => "[" ++ string_of_list_ascii cs ++ "]"
+  | TChar c => escape_byte c
+  | TClass cs => "[" ++ escape_string (string_of_list_ascii cs) ++ "]"
   | TStar => "*"
   | TCat => ""
   | TAlt => "|"
@@ -171,8 +246,6 @@ with lex_class s cs :=
   end
 with lex_escape s maybe_cs :=
   match s with
-  | ("0" | "1" | "2" | "3" | "4" |
-     "5" | "6" | "7" | "8" | "9") ::: _ => [TErr]
   | "x" ::: c1 ::: c2 ::: s' =>
       if hex_to_byte c1 c2 is Some c then
         match maybe_cs with
@@ -180,8 +253,9 @@ with lex_escape s maybe_cs :=
         | None => TChar c :: lex_tokens s'
         end
       else [TErr]
-  | "x" ::: _ => [TErr]
-  | c ::: s' => TChar c :: lex_tokens s'
+  | c ::: s' =>
+      if unescape_byte c is Some c'
+      then TChar c' :: lex_tokens s' else [TErr]
   | "" => [TErr]
   end.
 
