@@ -226,57 +226,68 @@ Definition regexp_to_string (re : regexp) : string :=
 
 Fixpoint lex_tokens (s : string) : list token :=
   match s with
-  | "*" ::: s' => TStar :: lex_tokens s'
-  | "|" ::: s' => TAlt :: lex_tokens s'
-  | "&" ::: s' => TAnd :: lex_tokens s'
-  | "(" ::: s' => TParenL :: lex_tokens s'
-  | ")" ::: s' => TParenR :: lex_tokens s'
-  | "[" ::: s' => lex_class s' []
-  | "]" ::: s' => [TErr]
-  | "\" ::: s' => lex_escape s' None
-  | c ::: s' => TChar c :: lex_tokens s'
+  | c ::: s' =>
+      if ascii_dec c "*" then TStar :: lex_tokens s'
+      else if ascii_dec c "|" then TAlt :: lex_tokens s'
+      else if ascii_dec c "&" then TAnd :: lex_tokens s'
+      else if ascii_dec c "(" then TParenL :: lex_tokens s'
+      else if ascii_dec c ")" then TParenR :: lex_tokens s'
+      else if ascii_dec c "[" then lex_class s' []
+      else if ascii_dec c "]" then [TErr]
+      else if ascii_dec c "\" then lex_escape s' None
+      else TChar c :: lex_tokens s'
   | "" => []
   end
 with lex_class s cs :=
   match s with
-  | "]" ::: s' => TClass (rev cs) :: lex_tokens s'
-  | "\" ::: s' => lex_escape s' (Some cs)
-  | c ::: s' => lex_class s' (c :: cs)
+  | c ::: s' =>
+      if ascii_dec c "]" then TClass (rev cs) :: lex_tokens s'
+      else if ascii_dec c "\" then lex_escape s' (Some cs)
+      else lex_class s' (c :: cs)
   | "" => [TErr]
   end
 with lex_escape s maybe_cs :=
   match s with
-  | "x" ::: c1 ::: c2 ::: s' =>
-      if hex_to_byte c1 c2 is Some c then
-        match maybe_cs with
-        | Some cs => lex_class s' (c :: cs)
-        | None => TChar c :: lex_tokens s'
-        end
-      else [TErr]
   | c ::: s' =>
-      if unescape_byte c is Some c'
+      if ascii_dec c "x" then
+        if s' is c1 ::: c2 ::: s' then
+          if hex_to_byte c1 c2 is Some c then
+            match maybe_cs with
+            | Some cs => lex_class s' (c :: cs)
+            | None => TChar c :: lex_tokens s'
+            end
+          else [TErr]
+        else [TErr]
+      else if unescape_byte c is Some c'
       then TChar c' :: lex_tokens s' else [TErr]
   | "" => [TErr]
   end.
 
-Fixpoint insert_invisible (ts : list token) : list token :=
+Fixpoint insert_invisible_rec (ts : list token) : list token :=
   match ts with
-  | t1 :: (t2 :: _) as ts' =>
-      match t1, t2 with
-      | TParenL, (TAlt | TAnd) | (TAlt | TAnd), TParenR =>
-          t1 :: TNil :: insert_invisible ts'
-      | (TChar _ | TClass _ | TStar | TParenR), (TChar _ | TClass _ | TParenL) =>
-          t1 :: TCat :: insert_invisible ts'
-      | _, _ => t1 :: insert_invisible ts'
-      end
-  | t :: ts' => t :: insert_invisible ts'
+  | t :: ts' =>
+      t :: match t, ts' with
+           | TParenL, (TAlt | TAnd) :: _
+           | (TAlt | TAnd), (TParenR :: _ | []) =>
+              TNil :: insert_invisible_rec ts'
+           | (TChar _ | TClass _ | TStar | TParenR), (TChar _ | TClass _ | TParenL) :: _ =>
+              TCat :: insert_invisible_rec ts'
+           | _, _ => insert_invisible_rec ts'
+           end
   | [] => []
+  end.
+
+Definition insert_invisible (ts : list token) : list token :=
+  match ts with
+  | (TAlt | TAnd) :: _ => TNil :: insert_invisible_rec ts
+  | _ :: _ => insert_invisible_rec ts
+  | [] => [TNil]
   end.
 
 Definition lex (s : string) : list token :=
   insert_invisible (lex_tokens s).
 
-Definition apply_op op rs : option (list regexp) :=
+Definition apply_op op rs :=
   match op, rs with
   | OGroup, _ => Some rs
   | OCat, re2 :: re1 :: rs' => Some (Cat re1 re2 :: rs')
@@ -286,22 +297,33 @@ Definition apply_op op rs : option (list regexp) :=
   | _, _ => None
   end.
 
+Fixpoint close_group rs ops :=
+  match ops with
+  | OGroup :: ops' => Some (rs, ops')
+  | op :: ops' =>
+      if apply_op op rs is Some rs' then close_group rs' ops' else None
+  | [] => None
+  end.
+
+Fixpoint push_op op rs ops :=
+  match ops with
+  | OGroup :: _ | [] => Some (rs, op :: ops)
+  | op2 :: ops' =>
+      if greater_precedence op2 op then
+        if apply_op op2 rs is Some rs' then push_op op rs' ops' else None
+      else Some (rs, op :: ops)
+  end.
+
+Fixpoint fold_ops rs ops :=
+  match ops, rs with
+  | op :: ops', _ =>
+      if apply_op op rs is Some rs'
+      then fold_ops rs' ops' else None
+  | [], [re] => Some re
+  | [], _ => None
+  end.
+
 Definition parse_token (t : token) (rs : list regexp) (ops : list regexp_op) : option (list regexp * list regexp_op) :=
-  let fix close_group rs ops :=
-    match ops with
-    | OGroup :: ops' => Some (rs, ops')
-    | op :: ops' =>
-        if apply_op op rs is Some rs' then close_group rs' ops' else None
-    | [] => None
-    end in
-  let fix push_op op rs ops :=
-    match ops with
-    | OGroup :: _ | [] => Some (rs, op :: ops)
-    | op2 :: ops' =>
-        if greater_precedence op2 op then
-          if apply_op op2 rs is Some rs' then push_op op rs' ops' else None
-        else Some (rs, op :: ops)
-    end in
   match t with
   | TNil => Some (Nil :: rs, ops)
   | TChar c => Some (Char c :: rs, ops)
@@ -315,26 +337,16 @@ Definition parse_token (t : token) (rs : list regexp) (ops : list regexp_op) : o
   | TErr => None
   end%char.
 
-Definition parse_tokens (ts : list token) : option regexp :=
-  let fix fold_ops rs ops :=
-    match ops, rs with
-    | op :: ops', _ =>
-        if apply_op op rs is Some rs'
-        then fold_ops rs' ops' else None
-    | [], [re] => Some re
-    | [], _ => None
-    end in
-  let fix parse_rec ts rs ops :=
-    match ts with
-    | t :: ts' =>
-        if parse_token t rs ops is Some (rs', ops')
-        then parse_rec ts' rs' ops' else None
-    | [] => fold_ops rs ops
-    end in
-  parse_rec ts [] [].
+Fixpoint parse_tokens (ts : list token) (rs : list regexp) (ops : list regexp_op) : option regexp :=
+  match ts with
+  | t :: ts' =>
+      if parse_token t rs ops is Some (rs', ops')
+      then parse_tokens ts' rs' ops' else None
+  | [] => fold_ops rs ops
+  end.
 
 Definition parse (s : string) : option regexp :=
-  parse_tokens (lex s).
+  parse_tokens (lex s) [] [].
 
 Goal parse "ab(cd|e*f|)*g&abcd"
 = Some (And (Cat (Char "a") (Cat (Char "b") (Cat (Star (Alt (Cat (Char "c") (Char "d"))
@@ -342,3 +354,20 @@ Goal parse "ab(cd|e*f|)*g&abcd"
                                                  (Char "g"))))
             (Cat (Char "a") (Cat (Char "b") (Cat (Char "c") (Char "d"))))).
 Proof. reflexivity. Qed.
+
+Lemma lex_tokens_escape_byte : forall c s,
+  lex_tokens (escape_byte c ++ s) = TChar c :: lex_tokens s.
+Proof. now destruct c as [[] [] [] [] [] [] [] []]. Qed.
+
+Lemma lex_escape_byte : forall c s,
+  lex (escape_byte c ++ s) = insert_invisible (TChar c :: lex_tokens s).
+Proof. now destruct c as [[] [] [] [] [] [] [] []]. Qed.
+
+Lemma lex_tokens_escape_string : forall s,
+  lex_tokens (escape_string s) = map TChar (list_ascii_of_string s).
+Proof.
+  induction s. reflexivity. cbn. now rewrite lex_tokens_escape_byte, IHs. Qed.
+
+Lemma parse_escape_byte : forall c,
+  parse (escape_byte c) = Some (Char c).
+Proof. now destruct c as [[] [] [] [] [] [] [] []]. Qed.
