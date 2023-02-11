@@ -1,5 +1,6 @@
 -Q theories recross
 theories/util.v
+theories/interval.v
 theories/utf8.v
 theories/regexp.v
 theories/regexp_syntax.v
